@@ -20,11 +20,18 @@ final class CspExtensionTest extends TestCase
         self::assertContains('csp_nonce', $names);
     }
 
-    public function testReturnsNonceFromGenerator(): void
+    public function testReturnsNonceFromGeneratorWithHandle(): void
     {
         $generator = new CspNonceGenerator();
         $extension = new CspExtension($generator);
 
-        self::assertSame($generator->getNonce(), $extension->getNonce());
+        self::assertSame($generator->getNonce('main'), $extension->getNonce('main'));
+    }
+
+    public function testDifferentHandlesReturnDifferentNonces(): void
+    {
+        $extension = new CspExtension(new CspNonceGenerator());
+
+        self::assertNotSame($extension->getNonce('main'), $extension->getNonce('analytics'));
     }
 }

@@ -4,20 +4,23 @@ declare(strict_types=1);
 
 namespace MulerTech\CspBundle\EventSubscriber;
 
-use MulerTech\CspBundle\CspNonceGenerator;
+use MulerTech\CspBundle\Event\BuildCspHeaderEvent;
+use MulerTech\CspBundle\Service\CspHeaderBuilder;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 final class CspHeaderSubscriber implements EventSubscriberInterface
 {
     /**
-     * @param array<string, string|bool|null> $directives
+     * @param array{url: ?string, route: ?string, route_params: array<string, string>, chance: int} $reportConfig
      */
     public function __construct(
-        private readonly CspNonceGenerator $nonceGenerator,
-        private readonly array $directives,
+        private readonly CspHeaderBuilder $builder,
+        private readonly EventDispatcherInterface $dispatcher,
         private readonly bool $reportOnly,
+        private readonly array $reportConfig,
     ) {
     }
 
@@ -42,36 +45,31 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $headerValue = $this->buildHeaderValue();
+        $cspEvent = new BuildCspHeaderEvent($event->getRequest());
+        $this->dispatcher->dispatch($cspEvent, BuildCspHeaderEvent::NAME);
+
+        $headerValue = $cspEvent->getHeaderValue() ?? $this->builder->build();
 
         if ('' !== $headerValue) {
             $event->getResponse()->headers->set($headerName, $headerValue);
         }
+
+        $this->addReportingEndpointsHeader($event, $headerValue);
     }
 
-    private function buildHeaderValue(): string
+    private function addReportingEndpointsHeader(ResponseEvent $event, string $headerValue): void
     {
-        $nonce = $this->nonceGenerator->getNonce();
-        $parts = [];
-
-        foreach ($this->directives as $directive => $value) {
-            if (null === $value) {
-                continue;
-            }
-
-            if (true === $value) {
-                $parts[] = $directive;
-                continue;
-            }
-
-            if (false === $value) {
-                continue;
-            }
-
-            $resolvedValue = str_replace('{nonce}', $nonce, $value);
-            $parts[] = $directive.' '.$resolvedValue;
+        if (!str_contains($headerValue, 'report-to csp-endpoint')) {
+            return;
         }
 
-        return implode('; ', $parts);
+        $reportUrl = $this->reportConfig['url'] ?? null;
+
+        if (null !== $reportUrl && '' !== $reportUrl) {
+            $event->getResponse()->headers->set(
+                'Reporting-Endpoints',
+                'csp-endpoint="'.$reportUrl.'"',
+            );
+        }
     }
 }

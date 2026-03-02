@@ -6,14 +6,11 @@ namespace MulerTech\CspBundle;
 
 final class CspNonceGenerator
 {
-    private ?string $nonce = null;
+    /** @var array<string, string> */
+    private array $nonces = [];
 
-    public function getNonce(): string
+    public function getNonce(string $handle = 'default'): string
     {
-        if (null === $this->nonce) {
-            $this->nonce = base64_encode(random_bytes(32));
-        }
-
-        return $this->nonce;
+        return $this->nonces[$handle] ??= base64_encode(random_bytes(32));
     }
 }

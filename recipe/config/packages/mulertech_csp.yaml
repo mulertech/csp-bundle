@@ -1,4 +1,8 @@
 mulertech_csp:
     directives:
-        script-src: "'self' 'nonce-{nonce}'"
-        style-src: "'self' 'unsafe-inline'"
+        script-src:
+            - "'self'"
+            - "nonce(main)"
+        style-src:
+            - "'self'"
+            - "'unsafe-inline'"

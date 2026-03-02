@@ -19,13 +19,15 @@
         "symfony/http-foundation": "^6.4 || ^7.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "^11.5 || ^12.0",
-        "phpstan/phpstan": "^2.0",
         "friendsofphp/php-cs-fixer": "^3.0",
+        "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^11.5 || ^12.0",
+        "symfony/routing": "^6.4 || ^7.0",
         "twig/twig": "^3.0"
     },
     "suggest": {
-        "twig/twig": "Required to use the csp_nonce() Twig function"
+        "twig/twig": "Required to use the csp_nonce() Twig function",
+        "symfony/routing": "Required to use route-based CSP violation reporting"
     },
     "autoload": {
         "psr-4": {

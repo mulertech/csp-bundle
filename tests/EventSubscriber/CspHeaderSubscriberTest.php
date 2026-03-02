@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace MulerTech\CspBundle\Tests\EventSubscriber;
 
 use MulerTech\CspBundle\CspNonceGenerator;
+use MulerTech\CspBundle\Event\BuildCspHeaderEvent;
 use MulerTech\CspBundle\EventSubscriber\CspHeaderSubscriber;
+use MulerTech\CspBundle\Service\CspHeaderBuilder;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
@@ -16,10 +19,12 @@ use Symfony\Component\HttpKernel\KernelEvents;
 final class CspHeaderSubscriberTest extends TestCase
 {
     private CspNonceGenerator $nonceGenerator;
+    private EventDispatcher $dispatcher;
 
     protected function setUp(): void
     {
         $this->nonceGenerator = new CspNonceGenerator();
+        $this->dispatcher = new EventDispatcher();
     }
 
     public function testSubscribedEvents(): void
@@ -33,7 +38,7 @@ final class CspHeaderSubscriberTest extends TestCase
     public function testSetsHeaderOnMainRequest(): void
     {
         $subscriber = $this->createSubscriber([
-            'default-src' => "'self'",
+            'default-src' => ["'self'"],
         ]);
 
         $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
@@ -46,7 +51,7 @@ final class CspHeaderSubscriberTest extends TestCase
     public function testIgnoresSubRequest(): void
     {
         $subscriber = $this->createSubscriber([
-            'default-src' => "'self'",
+            'default-src' => ["'self'"],
         ]);
 
         $event = $this->createResponseEvent(HttpKernelInterface::SUB_REQUEST);
@@ -58,7 +63,7 @@ final class CspHeaderSubscriberTest extends TestCase
     public function testDoesNotOverwriteExistingHeader(): void
     {
         $subscriber = $this->createSubscriber([
-            'default-src' => "'self'",
+            'default-src' => ["'self'"],
         ]);
 
         $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
@@ -71,37 +76,22 @@ final class CspHeaderSubscriberTest extends TestCase
     public function testReplacesNoncePlaceholder(): void
     {
         $subscriber = $this->createSubscriber([
-            'script-src' => "'self' 'nonce-{nonce}'",
+            'script-src' => ["'self'", 'nonce(main)'],
         ]);
 
         $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
         $subscriber->onKernelResponse($event);
 
         $header = $event->getResponse()->headers->get('Content-Security-Policy');
-        $nonce = $this->nonceGenerator->getNonce();
+        $nonce = $this->nonceGenerator->getNonce('main');
 
         self::assertSame("script-src 'self' 'nonce-".$nonce."'", $header);
     }
 
-    public function testNullDirectivesAreOmitted(): void
+    public function testBooleanDirectiveTrue(): void
     {
         $subscriber = $this->createSubscriber([
-            'default-src' => "'self'",
-            'report-uri' => null,
-        ]);
-
-        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
-        $subscriber->onKernelResponse($event);
-
-        $header = $event->getResponse()->headers->get('Content-Security-Policy');
-
-        self::assertSame("default-src 'self'", $header);
-    }
-
-    public function testUpgradeInsecureRequestsBoolean(): void
-    {
-        $subscriber = $this->createSubscriber([
-            'default-src' => "'self'",
+            'default-src' => ["'self'"],
             'upgrade-insecure-requests' => true,
         ]);
 
@@ -113,10 +103,10 @@ final class CspHeaderSubscriberTest extends TestCase
         self::assertSame("default-src 'self'; upgrade-insecure-requests", $header);
     }
 
-    public function testUpgradeInsecureRequestsFalseIsOmitted(): void
+    public function testBooleanDirectiveFalseIsOmitted(): void
     {
         $subscriber = $this->createSubscriber([
-            'default-src' => "'self'",
+            'default-src' => ["'self'"],
             'upgrade-insecure-requests' => false,
         ]);
 
@@ -131,7 +121,7 @@ final class CspHeaderSubscriberTest extends TestCase
     public function testReportOnlyUsesCorrectHeaderName(): void
     {
         $subscriber = $this->createSubscriber(
-            ['default-src' => "'self'"],
+            ['default-src' => ["'self'"]],
             reportOnly: true,
         );
 
@@ -143,12 +133,60 @@ final class CspHeaderSubscriberTest extends TestCase
         self::assertSame("default-src 'self'", $event->getResponse()->headers->get('Content-Security-Policy-Report-Only'));
     }
 
-    /**
-     * @param array<string, string|bool|null> $directives
-     */
-    private function createSubscriber(array $directives, bool $reportOnly = false): CspHeaderSubscriber
+    public function testEventOverridesBuilderOutput(): void
     {
-        return new CspHeaderSubscriber($this->nonceGenerator, $directives, $reportOnly);
+        $this->dispatcher->addListener(BuildCspHeaderEvent::NAME, static function (BuildCspHeaderEvent $event): void {
+            $event->setHeaderValue("default-src 'none'");
+        });
+
+        $subscriber = $this->createSubscriber([
+            'default-src' => ["'self'"],
+        ]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
+        $subscriber->onKernelResponse($event);
+
+        self::assertSame("default-src 'none'", $event->getResponse()->headers->get('Content-Security-Policy'));
+    }
+
+    public function testEventReceivesRequest(): void
+    {
+        $receivedRequest = null;
+
+        $this->dispatcher->addListener(BuildCspHeaderEvent::NAME, static function (BuildCspHeaderEvent $event) use (&$receivedRequest): void {
+            $receivedRequest = $event->getRequest();
+        });
+
+        $subscriber = $this->createSubscriber([
+            'default-src' => ["'self'"],
+        ]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
+        $subscriber->onKernelResponse($event);
+
+        self::assertSame($event->getRequest(), $receivedRequest);
+    }
+
+    /**
+     * @param array<string, list<string>|bool>                                                      $directives
+     * @param array{url: ?string, route: ?string, route_params: array<string, string>, chance: int} $reportConfig
+     */
+    private function createSubscriber(
+        array $directives,
+        bool $reportOnly = false,
+        array $reportConfig = ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+    ): CspHeaderSubscriber {
+        $builder = new CspHeaderBuilder(
+            $this->nonceGenerator,
+            $directives,
+            [],
+            $reportConfig,
+        );
+
+        $subscriber = new CspHeaderSubscriber($builder, $this->dispatcher, $reportOnly, $reportConfig);
+        $this->dispatcher->addSubscriber($subscriber);
+
+        return $subscriber;
     }
 
     private function createResponseEvent(int $requestType): ResponseEvent

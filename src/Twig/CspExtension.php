@@ -22,8 +22,8 @@ final class CspExtension extends AbstractExtension
         ];
     }
 
-    public function getNonce(): string
+    public function getNonce(string $handle): string
     {
-        return $this->nonceGenerator->getNonce();
+        return $this->nonceGenerator->getNonce($handle);
     }
 }
