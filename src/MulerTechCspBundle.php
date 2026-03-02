@@ -14,7 +14,7 @@ use Twig\Extension\AbstractExtension;
 
 final class MulerTechCspBundle extends AbstractBundle
 {
-    protected string $extensionAlias = 'csp';
+    protected string $extensionAlias = 'mulertech_csp';
 
     public function configure(DefinitionConfigurator $definition): void
     {
@@ -25,6 +25,7 @@ final class MulerTechCspBundle extends AbstractBundle
                     ->defaultFalse()
                 ->end()
                 ->arrayNode('directives')
+                    ->normalizeKeys(false)
                     ->addDefaultsIfNotSet()
                     ->children()
                         ->scalarNode('default-src')->defaultValue("'self'")->end()
@@ -59,13 +60,13 @@ final class MulerTechCspBundle extends AbstractBundle
         }
 
         $container->services()
-            ->set('csp.nonce_generator', CspNonceGenerator::class)
-            ->alias(CspNonceGenerator::class, 'csp.nonce_generator');
+            ->set('mulertech_csp.nonce_generator', CspNonceGenerator::class)
+            ->alias(CspNonceGenerator::class, 'mulertech_csp.nonce_generator');
 
         $container->services()
-            ->set('csp.header_subscriber', CspHeaderSubscriber::class)
+            ->set('mulertech_csp.header_subscriber', CspHeaderSubscriber::class)
             ->args([
-                '$nonceGenerator' => $builder->getDefinition('csp.nonce_generator'),
+                '$nonceGenerator' => $builder->getDefinition('mulertech_csp.nonce_generator'),
                 '$directives' => $config['directives'],
                 '$reportOnly' => $config['report_only'],
             ])
@@ -73,9 +74,9 @@ final class MulerTechCspBundle extends AbstractBundle
 
         if (class_exists(AbstractExtension::class)) {
             $container->services()
-                ->set('csp.twig_extension', CspExtension::class)
+                ->set('mulertech_csp.twig_extension', CspExtension::class)
                 ->args([
-                    '$nonceGenerator' => $builder->getDefinition('csp.nonce_generator'),
+                    '$nonceGenerator' => $builder->getDefinition('mulertech_csp.nonce_generator'),
                 ])
                 ->tag('twig.extension');
         }

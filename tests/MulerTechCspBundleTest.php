@@ -19,6 +19,6 @@ final class MulerTechCspBundleTest extends TestCase
         $extension = $bundle->getContainerExtension();
 
         self::assertNotNull($extension);
-        self::assertSame('csp', $extension->getAlias());
+        self::assertSame('mulertech_csp', $extension->getAlias());
     }
 }
