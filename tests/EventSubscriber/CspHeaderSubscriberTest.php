@@ -167,6 +167,57 @@ final class CspHeaderSubscriberTest extends TestCase
         self::assertSame($event->getRequest(), $receivedRequest);
     }
 
+    public function testAddsReportingEndpointsHeaderWhenReportUrlSet(): void
+    {
+        $subscriber = $this->createSubscriber(
+            ['default-src' => ["'self'"]],
+            reportConfig: ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100],
+        );
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
+        $subscriber->onKernelResponse($event);
+
+        self::assertTrue($event->getResponse()->headers->has('Reporting-Endpoints'));
+        self::assertSame('csp-endpoint="https://report.example.com/csp"', $event->getResponse()->headers->get('Reporting-Endpoints'));
+    }
+
+    public function testDoesNotAddReportingEndpointsHeaderWhenNoReportUrl(): void
+    {
+        $subscriber = $this->createSubscriber(
+            ['default-src' => ["'self'"]],
+            reportConfig: ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+        );
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
+        $subscriber->onKernelResponse($event);
+
+        self::assertFalse($event->getResponse()->headers->has('Reporting-Endpoints'));
+    }
+
+    public function testEmptyHeaderValueDoesNotSetHeader(): void
+    {
+        $subscriber = $this->createSubscriber([]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
+        $subscriber->onKernelResponse($event);
+
+        self::assertFalse($event->getResponse()->headers->has('Content-Security-Policy'));
+    }
+
+    public function testEventWithEmptyHeaderValueDoesNotSetHeader(): void
+    {
+        $this->dispatcher->addListener(BuildCspHeaderEvent::NAME, static function (BuildCspHeaderEvent $event): void {
+            $event->setHeaderValue('');
+        });
+
+        $subscriber = $this->createSubscriber(['default-src' => ["'self'"]]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
+        $subscriber->onKernelResponse($event);
+
+        self::assertFalse($event->getResponse()->headers->has('Content-Security-Policy'));
+    }
+
     /**
      * @param array<string, list<string>|bool>                                                      $directives
      * @param array{url: ?string, route: ?string, route_params: array<string, string>, chance: int} $reportConfig

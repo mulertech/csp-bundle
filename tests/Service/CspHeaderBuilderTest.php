@@ -7,6 +7,7 @@ namespace MulerTech\CspBundle\Tests\Service;
 use MulerTech\CspBundle\CspNonceGenerator;
 use MulerTech\CspBundle\Service\CspHeaderBuilder;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 final class CspHeaderBuilderTest extends TestCase
 {
@@ -136,6 +137,28 @@ final class CspHeaderBuilderTest extends TestCase
         self::assertStringContainsString('report-to csp-endpoint', $header);
     }
 
+    public function testReportingWithRouteAndUrlGenerator(): void
+    {
+        $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
+        $urlGenerator->expects(self::once())
+            ->method('generate')
+            ->with('csp_report', ['_format' => 'json'], UrlGeneratorInterface::ABSOLUTE_URL)
+            ->willReturn('https://example.com/csp-report');
+
+        $builder = new CspHeaderBuilder(
+            $this->nonceGenerator,
+            ['default-src' => ["'self'"]],
+            [],
+            ['url' => null, 'route' => 'csp_report', 'route_params' => ['_format' => 'json'], 'chance' => 100],
+            $urlGenerator,
+        );
+
+        $header = $builder->build();
+
+        self::assertStringContainsString('report-uri https://example.com/csp-report', $header);
+        self::assertStringContainsString('report-to csp-endpoint', $header);
+    }
+
     public function testReportingWithChanceZero(): void
     {
         $builder = $this->createBuilder(
@@ -185,6 +208,15 @@ final class CspHeaderBuilderTest extends TestCase
 
         self::assertStringContainsString('https://override.com', $header);
         self::assertStringNotContainsString('https://original.com', $header);
+    }
+
+    public function testBuildWithEmptyDirectivesReturnsEmptyString(): void
+    {
+        $builder = $this->createBuilder([]);
+
+        $header = $builder->build();
+
+        self::assertSame('', $header);
     }
 
     /**

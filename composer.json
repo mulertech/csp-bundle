@@ -11,7 +11,7 @@
         }
     ],
     "require": {
-        "php": ">=8.2",
+        "php": ">=8.4",
         "symfony/event-dispatcher": "^6.4 || ^7.0",
         "symfony/http-kernel": "^6.4 || ^7.0",
         "symfony/config": "^6.4 || ^7.0",
@@ -20,6 +20,7 @@
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.0",
+        "mulertech/docker-dev": "^3.1",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^11.5 || ^12.0",
         "symfony/routing": "^6.4 || ^7.0",
