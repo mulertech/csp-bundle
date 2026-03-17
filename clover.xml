@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1773744961">
-  <project timestamp="1773744961" name="Clover Coverage">
+<coverage generated="1773745329">
+  <project timestamp="1773745329" name="Clover Coverage">
     <package name="MulerTech\CspBundle">
       <file name="/app/src/CspNonceGenerator.php">
         <class name="MulerTech\CspBundle\CspNonceGenerator" namespace="MulerTech\CspBundle">
