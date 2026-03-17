@@ -9,7 +9,6 @@
          displayDetailsOnTestsThatTriggerNotices="true"
          displayDetailsOnTestsThatTriggerWarnings="true"
          displayDetailsOnPhpunitDeprecations="true"
-         displayDetailsOnPhpunitNotices="true"
          displayDetailsOnSkippedTests="true"
 >
     <testsuites>
