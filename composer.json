@@ -6,12 +6,12 @@
     "keywords": ["symfony", "csp", "content-security-policy", "nonce", "security"],
     "authors": [
         {
-            "name": "MulerTech",
-            "email": "contact@mulertech.com"
+            "name": "Sebastien Muler",
+            "email": "sebastien.muler@mulertech.net"
         }
     ],
     "require": {
-        "php": ">=8.4",
+        "php": "^8.4",
         "symfony/event-dispatcher": "^6.4 || ^7.0",
         "symfony/http-kernel": "^6.4 || ^7.0",
         "symfony/config": "^6.4 || ^7.0",
@@ -20,7 +20,7 @@
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.0",
-        "mulertech/docker-dev": "^3.1",
+        "mulertech/docker-dev": "^3.2",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^11.5 || ^12.0",
         "symfony/routing": "^6.4 || ^7.0",

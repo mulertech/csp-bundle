@@ -3,28 +3,30 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          colors="true"
-         failOnRisky="true"
-         failOnWarning="true"
-         displayDetailsOnTestsThatTriggerDeprecations="true"
-         displayDetailsOnTestsThatTriggerNotices="true"
-         displayDetailsOnTestsThatTriggerWarnings="true"
-         displayDetailsOnPhpunitDeprecations="true"
-         displayDetailsOnSkippedTests="true"
+         testdox="true"
+         beStrictAboutTestsThatDoNotTestAnything="false"
 >
+    <php>
+        <ini name="date.timezone" value="UTC"/>
+        <ini name="memory_limit" value="2048M"/>
+    </php>
     <testsuites>
-        <testsuite name="CSP Bundle Test Suite">
-            <directory>tests</directory>
+        <testsuite name="Mulertech test suite">
+            <directory>./tests</directory>
         </testsuite>
     </testsuites>
-
-    <source>
-        <include>
-            <directory>src</directory>
-        </include>
-    </source>
     <coverage>
         <report>
-            <clover outputFile="clover.xml" />
+            <clover outputFile="clover.xml"/>
         </report>
     </coverage>
+    <source>
+        <include>
+            <directory>./src</directory>
+        </include>
+        <exclude>
+            <directory>./vendor</directory>
+            <directory>./tests</directory>
+        </exclude>
+    </source>
 </phpunit>

@@ -1,8 +1,7 @@
-/.phpunit.cache/
-/vendor/
+.idea
+.phpunit.cache
+vendor
 .php-cs-fixer.cache
-.phpunit.result.cache
+clover.xml
 composer.lock
-
-# Docker development environment
 .mtdocker/

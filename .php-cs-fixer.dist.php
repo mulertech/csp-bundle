@@ -1,14 +1,8 @@
 <?php
 
-$finder = (new PhpCsFixer\Finder())
-    ->in([
-        __DIR__ . '/src',
-        __DIR__ . '/tests',
-    ]);
+$finder = PhpCsFixer\Finder::create()->in(['src', 'tests']);
 
 return (new PhpCsFixer\Config())
-    ->setRules([
-        '@Symfony' => true,
-    ])
+    ->setRules(['@Symfony' => true])
     ->setRiskyAllowed(true)
     ->setFinder($finder);
