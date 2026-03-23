@@ -1,5 +1,5 @@
 .idea
-.phpunit.cache
+.phpunit*
 vendor
 .php-cs-fixer.cache
 clover.xml
