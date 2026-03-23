@@ -80,7 +80,9 @@ final class MulerTechCspBundle extends AbstractBundle
             return;
         }
 
-        $directives = $this->mergeDirectives($config['directives'] ?? []);
+        /** @var array<string, array<int|string, string>|bool> $userDirectives */
+        $userDirectives = $config['directives'] ?? [];
+        $directives = $this->mergeDirectives($userDirectives);
 
         $container->services()
             ->set('mulertech_csp.nonce_generator', CspNonceGenerator::class)

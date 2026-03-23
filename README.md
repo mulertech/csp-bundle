@@ -5,7 +5,7 @@ ___
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/mulertech/csp-bundle/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/mulertech/csp-bundle/actions/workflows/tests.yml)
 [![GitHub PHPStan Action Status](https://img.shields.io/github/actions/workflow/status/mulertech/csp-bundle/phpstan.yml?branch=main&label=phpstan&style=flat-square)](https://github.com/mulertech/csp-bundle/actions/workflows/phpstan.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/mulertech/csp-bundle.svg?style=flat-square)](https://packagist.org/packages/mulertech/csp-bundle)
-[![Test Coverage](https://raw.githubusercontent.com/mulertech/csp-bundle/main/badge-coverage.svg)](https://packagist.org/packages/mulertech/csp-bundle)
+[![Test Coverage](https://raw.githubusercontent.com/mulertech/csp-bundle/badge/badge-coverage.svg)](https://packagist.org/packages/mulertech/csp-bundle)
 ___
 
 Symfony bundle for Content Security Policy (CSP) header management with named nonce support.
