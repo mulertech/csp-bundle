@@ -124,6 +124,7 @@ jobs:
           rm badge-coverage.svg
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -- .
           git fetch origin badge || true
           if git rev-parse --verify origin/badge >/dev/null 2>&1; then
             git checkout badge
