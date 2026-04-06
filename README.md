@@ -4,6 +4,7 @@ ___
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/mulertech/csp-bundle.svg?style=flat-square)](https://packagist.org/packages/mulertech/csp-bundle)
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/mulertech/csp-bundle/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/mulertech/csp-bundle/actions/workflows/tests.yml)
 [![GitHub PHPStan Action Status](https://img.shields.io/github/actions/workflow/status/mulertech/csp-bundle/phpstan.yml?branch=main&label=phpstan&style=flat-square)](https://github.com/mulertech/csp-bundle/actions/workflows/phpstan.yml)
+[![GitHub Security Action Status](https://img.shields.io/github/actions/workflow/status/mulertech/csp-bundle/security.yml?branch=main&label=security&style=flat-square)](https://github.com/mulertech/csp-bundle/actions/workflows/security.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/mulertech/csp-bundle.svg?style=flat-square)](https://packagist.org/packages/mulertech/csp-bundle)
 [![Test Coverage](https://raw.githubusercontent.com/mulertech/csp-bundle/badge/badge-coverage.svg)](https://packagist.org/packages/mulertech/csp-bundle)
 ___

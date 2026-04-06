@@ -1,0 +1,29 @@
+name: Security
+
+on:
+  push:
+  schedule:
+    - cron: '0 8 * * 1'
+
+jobs:
+  security:
+    name: Composer Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: --prefer-stable
+
+      - name: Run security audit
+        run: composer audit

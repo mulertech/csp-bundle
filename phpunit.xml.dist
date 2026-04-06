@@ -5,6 +5,9 @@
          colors="true"
          testdox="true"
          beStrictAboutTestsThatDoNotTestAnything="false"
+         displayDetailsOnTestsThatTriggerDeprecations="true"
+         displayDetailsOnTestsThatTriggerWarnings="true"
+         displayDetailsOnPhpunitDeprecations="true"
 >
     <php>
         <ini name="date.timezone" value="UTC"/>
