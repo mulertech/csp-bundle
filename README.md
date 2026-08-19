@@ -16,11 +16,20 @@ Symfony bundle for Content Security Policy (CSP) header management with named no
 composer require mulertech/csp-bundle
 ```
 
+The package is a `symfony-bundle`, so Flex generates a recipe for it and registers it in `config/bundles.php` on its own. Without Flex, add the line by hand:
+
+```php
+return [
+    // ...
+    MulerTech\CspBundle\MulerTechCspBundle::class => ['all' => true],
+];
+```
+
+Without that line the package sits in `vendor/` doing nothing: no `Content-Security-Policy` header on responses, and `csp_nonce()` raises `Unknown "csp_nonce" function` in Twig.
+
 ## Configuration
 
-The bundle ships with secure defaults for all directives. You only need to override what differs from the defaults.
-
-Minimal `config/packages/mulertech_csp.yaml`:
+The bundle ships with secure defaults for every directive and works with no configuration file at all. Create `config/packages/mulertech_csp.yaml` to override what differs from those defaults:
 
 ```yaml
 mulertech_csp:
@@ -245,8 +254,8 @@ mulertech_csp:
 
 ## Requirements
 
-- PHP >= 8.2
-- Symfony 6.4 or 7.x
+- PHP >= 8.4
+- Symfony 6.4, 7.x or 8.x
 - Twig (optional, for the `csp_nonce()` function)
 - symfony/routing (optional, for route-based reporting)
 
