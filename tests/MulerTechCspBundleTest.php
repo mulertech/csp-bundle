@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace MulerTech\CspBundle\Tests;
 
 use MulerTech\CspBundle\CspNonceGenerator;
-use MulerTech\CspBundle\EventSubscriber\CspHeaderSubscriber;
 use MulerTech\CspBundle\MulerTechCspBundle;
 use MulerTech\CspBundle\Service\CspHeaderBuilder;
 use MulerTech\CspBundle\Twig\CspExtension;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\DependencyInjection\Reference;
 
 final class MulerTechCspBundleTest extends TestCase
 {
@@ -162,8 +162,9 @@ final class MulerTechCspBundleTest extends TestCase
         $subscriberDef = $container->getDefinition('mulertech_csp.header_subscriber');
         $subscriberArgs = $subscriberDef->getArguments();
 
-        self::assertArrayHasKey('$reportConfig', $subscriberArgs);
-        self::assertSame('https://report.example.com/csp', $subscriberArgs['$reportConfig']['url']);
+        // The endpoint is read from the builder, which resolves the url form and the route form alike
+        self::assertArrayNotHasKey('$reportConfig', $subscriberArgs);
+        self::assertArrayHasKey('$builder', $subscriberArgs);
     }
 
     public function testLoadExtensionWithReportOnly(): void
@@ -382,6 +383,51 @@ final class MulerTechCspBundleTest extends TestCase
         $args = $builderDef->getArguments();
 
         self::assertArrayHasKey('$urlGenerator', $args);
-        self::assertNotNull($args['$urlGenerator']);
+        self::assertInstanceOf(Reference::class, $args['$urlGenerator']);
+        self::assertSame('router', (string) $args['$urlGenerator']);
+    }
+
+    public function testNonceGeneratorIsTaggedForReset(): void
+    {
+        // Persistent runtimes keep the service alive across requests: without this tag the same nonce is reused
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $extension->load(['mulertech_csp' => ['enabled' => true]], $container);
+
+        $tags = $container->getDefinition('mulertech_csp.nonce_generator')->getTag('kernel.reset');
+
+        self::assertSame([['method' => 'reset']], $tags);
+    }
+
+    public function testLoadExtensionKeepsRouterReferenceWithoutRouterService(): void
+    {
+        // Extensions compile against an isolated container: the router is never registered there,
+        // so an optional reference is the only wiring that survives until the real compilation.
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $extension->load([
+            'mulertech_csp' => [
+                'enabled' => true,
+                'report' => [
+                    'route' => 'app_csp_report',
+                ],
+            ]
+        ], $container);
+
+        $args = $container->getDefinition('mulertech_csp.header_builder')->getArguments();
+
+        self::assertInstanceOf(Reference::class, $args['$urlGenerator']);
+        self::assertSame(
+            ContainerInterface::NULL_ON_INVALID_REFERENCE,
+            $args['$urlGenerator']->getInvalidBehavior(),
+        );
     }
 }

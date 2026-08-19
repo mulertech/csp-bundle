@@ -9,10 +9,10 @@ use MulerTech\CspBundle\Service\CspHeaderBuilder;
 use MulerTech\CspBundle\Twig\CspExtension;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Twig\Extension\AbstractExtension;
 
 final class MulerTechCspBundle extends AbstractBundle
@@ -86,18 +86,19 @@ final class MulerTechCspBundle extends AbstractBundle
 
         $container->services()
             ->set('mulertech_csp.nonce_generator', CspNonceGenerator::class)
+            ->tag('kernel.reset', ['method' => 'reset'])
             ->alias(CspNonceGenerator::class, 'mulertech_csp.nonce_generator');
 
-        $builderDef = $container->services()
+        $container->services()
             ->set('mulertech_csp.header_builder', CspHeaderBuilder::class)
             ->args([
                 '$nonceGenerator' => new Reference('mulertech_csp.nonce_generator'),
                 '$directives' => $directives,
                 '$alwaysAdd' => $config['always_add'] ?? [],
                 '$reportConfig' => $config['report'] ?? ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
-                '$urlGenerator' => interface_exists(UrlGeneratorInterface::class) && $builder->has('router')
-                    ? new Reference('router')
-                    : null,
+                // Extensions are loaded against isolated containers, where the router is never visible yet:
+                // the reference must stay optional and be resolved when the real container compiles.
+                '$urlGenerator' => new Reference('router', ContainerInterface::NULL_ON_INVALID_REFERENCE),
             ]);
 
         $container->services()
@@ -106,7 +107,6 @@ final class MulerTechCspBundle extends AbstractBundle
                 '$builder' => new Reference('mulertech_csp.header_builder'),
                 '$dispatcher' => new Reference('event_dispatcher'),
                 '$reportOnly' => $config['report_only'] ?? false,
-                '$reportConfig' => $config['report'] ?? ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
             ])
             ->tag('kernel.event_subscriber');
 

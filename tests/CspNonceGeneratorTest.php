@@ -51,6 +51,16 @@ final class CspNonceGeneratorTest extends TestCase
         self::assertNotSame($generatorA->getNonce('main'), $generatorB->getNonce('main'));
     }
 
+    public function testResetGeneratesNewNonces(): void
+    {
+        $generator = new CspNonceGenerator();
+
+        $before = $generator->getNonce('main');
+        $generator->reset();
+
+        self::assertNotSame($before, $generator->getNonce('main'));
+    }
+
     public function testReturnsValidBase64Of32Bytes(): void
     {
         $generator = new CspNonceGenerator();

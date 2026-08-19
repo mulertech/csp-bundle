@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 final class CspHeaderSubscriberTest extends TestCase
 {
@@ -181,6 +182,24 @@ final class CspHeaderSubscriberTest extends TestCase
         self::assertSame('csp-endpoint="https://report.example.com/csp"', $event->getResponse()->headers->get('Reporting-Endpoints'));
     }
 
+    public function testAddsReportingEndpointsHeaderWhenReportRouteSet(): void
+    {
+        $urlGenerator = $this->createStub(UrlGeneratorInterface::class);
+        $urlGenerator->method('generate')->willReturn('https://example.com/csp-report');
+
+        $subscriber = $this->createSubscriber(
+            ['default-src' => ["'self'"]],
+            reportConfig: ['url' => null, 'route' => 'app_csp_report', 'route_params' => [], 'chance' => 100],
+            urlGenerator: $urlGenerator,
+        );
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
+        $subscriber->onKernelResponse($event);
+
+        self::assertStringContainsString('report-to csp-endpoint', (string) $event->getResponse()->headers->get('Content-Security-Policy'));
+        self::assertSame('csp-endpoint="https://example.com/csp-report"', $event->getResponse()->headers->get('Reporting-Endpoints'));
+    }
+
     public function testDoesNotAddReportingEndpointsHeaderWhenNoReportUrl(): void
     {
         $subscriber = $this->createSubscriber(
@@ -226,15 +245,17 @@ final class CspHeaderSubscriberTest extends TestCase
         array $directives,
         bool $reportOnly = false,
         array $reportConfig = ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+        ?UrlGeneratorInterface $urlGenerator = null,
     ): CspHeaderSubscriber {
         $builder = new CspHeaderBuilder(
             $this->nonceGenerator,
             $directives,
             [],
             $reportConfig,
+            $urlGenerator,
         );
 
-        $subscriber = new CspHeaderSubscriber($builder, $this->dispatcher, $reportOnly, $reportConfig);
+        $subscriber = new CspHeaderSubscriber($builder, $this->dispatcher, $reportOnly);
         $this->dispatcher->addSubscriber($subscriber);
 
         return $subscriber;

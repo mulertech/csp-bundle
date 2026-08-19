@@ -13,14 +13,10 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 final class CspHeaderSubscriber implements EventSubscriberInterface
 {
-    /**
-     * @param array{url: ?string, route: ?string, route_params: array<string, string>, chance: int} $reportConfig
-     */
     public function __construct(
         private readonly CspHeaderBuilder $builder,
         private readonly EventDispatcherInterface $dispatcher,
         private readonly bool $reportOnly,
-        private readonly array $reportConfig,
     ) {
     }
 
@@ -63,7 +59,7 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $reportUrl = $this->reportConfig['url'] ?? null;
+        $reportUrl = $this->builder->getReportUrl();
 
         if (null !== $reportUrl && '' !== $reportUrl) {
             $event->getResponse()->headers->set(

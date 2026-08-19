@@ -118,7 +118,7 @@ mulertech_csp:
             - "nonce(analytics)"      # For analytics scripts
 ```
 
-Each named nonce generates a unique 256-bit (32 bytes) cryptographically secure value.
+Each named nonce generates a unique 256-bit (32 bytes) cryptographically secure value, and every request gets fresh ones. Persistent runtimes — FrankenPHP worker mode, RoadRunner, Swoole — keep services alive across requests, so the generator is tagged `kernel.reset`: a nonce reused from one page to the next would be readable by an attacker before the injection.
 
 ### always_add
 
@@ -146,7 +146,7 @@ mulertech_csp:
         chance: 50                    # Only 50% of requests
 ```
 
-Or use a Symfony route:
+Or use a Symfony route, resolved to an absolute URL:
 
 ```yaml
 mulertech_csp:
@@ -154,6 +154,8 @@ mulertech_csp:
         route: "app_csp_report"
         route_params: {}
 ```
+
+Both forms emit the same three markers: `report-uri` and `report-to csp-endpoint` inside the policy, plus a `Reporting-Endpoints` response header defining the `csp-endpoint` group. `report-uri` is deprecated but still the only form some browsers honour, hence the pair.
 
 ### Report-only mode
 

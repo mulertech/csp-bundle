@@ -82,7 +82,7 @@ final readonly class CspHeaderBuilder
      */
     private function addReporting(array &$parts): void
     {
-        $reportUrl = $this->resolveReportUrl();
+        $reportUrl = $this->getReportUrl();
 
         if (null === $reportUrl) {
             return;
@@ -96,7 +96,10 @@ final readonly class CspHeaderBuilder
         $parts[] = 'report-to csp-endpoint';
     }
 
-    private function resolveReportUrl(): ?string
+    /**
+     * Resolves the violation reporting endpoint, from the configured URL or the configured route.
+     */
+    public function getReportUrl(): ?string
     {
         if (null !== $this->reportConfig['url'] && '' !== $this->reportConfig['url']) {
             return $this->reportConfig['url'];
