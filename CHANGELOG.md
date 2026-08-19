@@ -1,5 +1,24 @@
 # Release notes for csp-bundle
 
+## v2.1.0 - 2026-08-19
+
+Fixes:
+
+- Route-based violation reporting: `report.route` produced no reporting at all. The router was resolved with `$builder->has('router')` while the bundle extension compiles against an isolated container, where the router is never registered — the check was always false and no report URL could be built. The router is now an optional reference resolved when the real container compiles.
+- `Reporting-Endpoints` response header is emitted for route-based reporting too, not only when `report.url` is set
+- Nonces are regenerated per request in persistent runtimes: `CspNonceGenerator` implements `ResetInterface` and its service is tagged `kernel.reset`. Under FrankenPHP worker mode, RoadRunner or Swoole, the same nonce was served on every request handled by a worker, which an attacker can read on a previous page.
+
+Changes:
+
+- `CspHeaderBuilder::getReportUrl()` is public: it resolves the `url` form and the `route` form alike
+- `CspHeaderSubscriber` no longer takes `$reportConfig`; the endpoint comes from the builder
+- `symfony/service-contracts: ^3.0` added as an explicit dependency
+
+Documentation:
+
+- Nonce lifetime documented, including persistent runtimes
+- Violation reporting documents the emitted markers: `report-uri`, `report-to csp-endpoint`, and the `Reporting-Endpoints` header
+
 ## v2.0.2 - 2026-08-19
 
 - README: Flex registers the bundle automatically (auto-generated recipe from the `symfony-bundle` type)
