@@ -1,5 +1,23 @@
 # Release notes for csp-bundle
 
+## v3.0.0 - 2026-08-24
+
+BREAKING CHANGES:
+
+- `style-src` defaults to `'self' nonce(main)` instead of `'self' 'unsafe-inline'`. A policy that
+  allows any inline style lets an injection read form values through attribute selectors and cover
+  the page with its own interface, which is most of what a script would have done. The two forms
+  never cohabit: a nonce makes browsers ignore `'unsafe-inline'` entirely. Every `<style>` element
+  served to a browser now needs `nonce="{{ csp_nonce('main') }}"`, and every `style="..."` attribute
+  stops being applied, silently, with no server-side error. An attribute carries neither a nonce nor
+  a usable hash, so it has to be rewritten as a class or as a rule inside a nonced block.
+- `base-uri` defaults to `'none'` instead of `'self'`. An injected `<base>` rewrites how every
+  relative URL on the page resolves, and virtually no application uses that tag.
+
+Applications needing the previous behaviour opt back in explicitly through `directives`. The upgrade
+notes in the README describe how to measure the impact first: keep the old policy enforced, put the
+new one under `report_only_directives`, and read the violations until the whole site has been seen.
+
 ## v2.3.0 - 2026-08-24
 
 New features:
