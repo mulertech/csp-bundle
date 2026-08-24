@@ -128,7 +128,7 @@ final class CspHeaderBuilderTest extends TestCase
     {
         $builder = $this->createBuilder(
             directives: ['default-src' => ["'self'"]],
-            reportConfig: ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100],
+            reportConfig: ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
         );
 
         $header = $builder->build();
@@ -149,7 +149,7 @@ final class CspHeaderBuilderTest extends TestCase
             $this->nonceGenerator,
             ['default-src' => ["'self'"]],
             [],
-            ['url' => null, 'route' => 'csp_report', 'route_params' => ['_format' => 'json'], 'chance' => 100],
+            ['url' => null, 'route' => 'csp_report', 'route_params' => ['_format' => 'json'], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
             $urlGenerator,
         );
 
@@ -163,7 +163,7 @@ final class CspHeaderBuilderTest extends TestCase
     {
         $builder = $this->createBuilder(
             directives: ['default-src' => ["'self'"]],
-            reportConfig: ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 0],
+            reportConfig: ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 0, 'markers' => ['report-uri', 'report-to']],
         );
 
         $header = $builder->build();
@@ -227,7 +227,7 @@ final class CspHeaderBuilderTest extends TestCase
     private function createBuilder(
         array $directives = [],
         array $alwaysAdd = [],
-        array $reportConfig = ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+        array $reportConfig = ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
     ): CspHeaderBuilder {
         return new CspHeaderBuilder(
             $this->nonceGenerator,
@@ -243,7 +243,7 @@ final class CspHeaderBuilderTest extends TestCase
             $this->nonceGenerator,
             ['default-src' => ["'self'"]],
             [],
-            ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+            ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
         );
 
         self::assertFalse($builder->shouldReport());
@@ -255,7 +255,7 @@ final class CspHeaderBuilderTest extends TestCase
             $this->nonceGenerator,
             ['default-src' => ["'self'"]],
             [],
-            ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100],
+            ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
         );
 
         self::assertTrue($builder->shouldReport());
@@ -267,7 +267,7 @@ final class CspHeaderBuilderTest extends TestCase
             $this->nonceGenerator,
             ['default-src' => ["'self'"]],
             [],
-            ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 0],
+            ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 0, 'markers' => ['report-uri', 'report-to']],
         );
 
         self::assertFalse($builder->shouldReport());
@@ -279,7 +279,7 @@ final class CspHeaderBuilderTest extends TestCase
             $this->nonceGenerator,
             ['default-src' => ["'self'"]],
             [],
-            ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100],
+            ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
         );
 
         self::assertSame("default-src 'self'", $builder->build(withReporting: false));
@@ -291,7 +291,7 @@ final class CspHeaderBuilderTest extends TestCase
             $this->nonceGenerator,
             ['default-src' => ["'self'"]],
             [],
-            ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+            ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
         );
 
         self::assertSame("default-src 'self'", $builder->build(withReporting: true));
@@ -308,10 +308,45 @@ final class CspHeaderBuilderTest extends TestCase
             $this->nonceGenerator,
             ['default-src' => ["'self'"]],
             [],
-            ['url' => null, 'route' => 'csp_report', 'route_params' => [], 'chance' => 100],
+            ['url' => null, 'route' => 'csp_report', 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
             $urlGenerator,
         );
 
         $builder->build();
+    }
+
+    public function testEmitsOnlyTheReportUriMarker(): void
+    {
+        $header = $this->createBuilderWithMarkers(['report-uri'])->build();
+
+        self::assertStringContainsString('report-uri https://report.example.com/csp', $header);
+        self::assertStringNotContainsString('report-to', $header);
+    }
+
+    public function testEmitsOnlyTheReportToMarker(): void
+    {
+        $header = $this->createBuilderWithMarkers(['report-to'])->build();
+
+        self::assertStringContainsString('report-to csp-endpoint', $header);
+        self::assertStringNotContainsString('report-uri', $header);
+    }
+
+    /**
+     * @param list<string> $markers
+     */
+    private function createBuilderWithMarkers(array $markers): CspHeaderBuilder
+    {
+        return new CspHeaderBuilder(
+            $this->nonceGenerator,
+            ['default-src' => ["'self'"]],
+            [],
+            [
+                'url' => 'https://report.example.com/csp',
+                'route' => null,
+                'route_params' => [],
+                'chance' => 100,
+                'markers' => $markers,
+            ],
+        );
     }
 }

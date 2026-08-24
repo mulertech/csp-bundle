@@ -172,7 +172,7 @@ final class CspHeaderSubscriberTest extends TestCase
     {
         $subscriber = $this->createSubscriber(
             ['default-src' => ["'self'"]],
-            reportConfig: ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100],
+            reportConfig: ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
         );
 
         $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
@@ -189,7 +189,7 @@ final class CspHeaderSubscriberTest extends TestCase
 
         $subscriber = $this->createSubscriber(
             ['default-src' => ["'self'"]],
-            reportConfig: ['url' => null, 'route' => 'app_csp_report', 'route_params' => [], 'chance' => 100],
+            reportConfig: ['url' => null, 'route' => 'app_csp_report', 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
             urlGenerator: $urlGenerator,
         );
 
@@ -204,7 +204,7 @@ final class CspHeaderSubscriberTest extends TestCase
     {
         $subscriber = $this->createSubscriber(
             ['default-src' => ["'self'"]],
-            reportConfig: ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+            reportConfig: ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
         );
 
         $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
@@ -235,6 +235,29 @@ final class CspHeaderSubscriberTest extends TestCase
         $subscriber->onKernelResponse($event);
 
         self::assertFalse($event->getResponse()->headers->has('Content-Security-Policy'));
+    }
+
+    public function testNoReportingEndpointsHeaderWithoutTheReportToMarker(): void
+    {
+        $subscriber = $this->createSubscriber(
+            ['default-src' => ["'self'"]],
+            reportConfig: [
+                'url' => 'https://report.example.com/csp',
+                'route' => null,
+                'route_params' => [],
+                'chance' => 100,
+                'markers' => ['report-uri'],
+            ],
+        );
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
+        $subscriber->onKernelResponse($event);
+
+        $headers = $event->getResponse()->headers;
+
+        self::assertStringContainsString('report-uri https://report.example.com/csp', (string) $headers->get('Content-Security-Policy'));
+        // The header only defines the group that report-to names: without that marker it has no purpose.
+        self::assertFalse($headers->has('Reporting-Endpoints'));
     }
 
     public function testCandidatePolicyRidesAlongAsReportOnly(): void
@@ -332,7 +355,7 @@ final class CspHeaderSubscriberTest extends TestCase
     {
         $subscriber = $this->createSubscriber(
             ['style-src' => ["'self'", "'unsafe-inline'"]],
-            reportConfig: ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100],
+            reportConfig: ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
             candidateDirectives: ['style-src' => ["'self'"]],
         );
 
@@ -354,7 +377,7 @@ final class CspHeaderSubscriberTest extends TestCase
     private function createSubscriber(
         array $directives,
         bool $reportOnly = false,
-        array $reportConfig = ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+        array $reportConfig = ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri', 'report-to']],
         ?UrlGeneratorInterface $urlGenerator = null,
         array $candidateDirectives = [],
     ): CspHeaderSubscriber {

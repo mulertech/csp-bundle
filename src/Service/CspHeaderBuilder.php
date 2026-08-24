@@ -10,9 +10,9 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 final readonly class CspHeaderBuilder
 {
     /**
-     * @param array<string, list<string>|bool>                                                      $directives
-     * @param list<string>                                                                          $alwaysAdd
-     * @param array{url: ?string, route: ?string, route_params: array<string, string>, chance: int} $reportConfig
+     * @param array<string, list<string>|bool>                                                                             $directives
+     * @param list<string>                                                                                                 $alwaysAdd
+     * @param array{url: ?string, route: ?string, route_params: array<string, string>, chance: int, markers: list<string>} $reportConfig
      */
     public function __construct(
         private CspNonceGenerator $nonceGenerator,
@@ -130,7 +130,15 @@ final readonly class CspHeaderBuilder
             return;
         }
 
-        $parts[] = 'report-uri '.$reportUrl;
-        $parts[] = 'report-to csp-endpoint';
+        // Both markers are advertised by default, but a policy carrying report-to makes browsers
+        // that support the Reporting API ignore report-uri entirely. Dropping report-to is what
+        // restores immediate, observable delivery.
+        if (in_array('report-uri', $this->reportConfig['markers'], true)) {
+            $parts[] = 'report-uri '.$reportUrl;
+        }
+
+        if (in_array('report-to', $this->reportConfig['markers'], true)) {
+            $parts[] = 'report-to csp-endpoint';
+        }
     }
 }

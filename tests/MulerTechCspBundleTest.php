@@ -534,4 +534,81 @@ final class MulerTechCspBundleTest extends TestCase
         self::assertFalse($container->hasDefinition('mulertech_csp.report_parser'));
         self::assertFalse($container->hasDefinition(CspReportController::class));
     }
+
+    public function testReportOnlyPolicyDropsTheDirectivesItCannotActOn(): void
+    {
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $extension->load([
+            'mulertech_csp' => [
+                'enabled' => true,
+                'report_only' => true,
+            ]
+        ], $container);
+
+        $directives = $container->getDefinition('mulertech_csp.header_builder')->getArguments()['$directives'];
+
+        self::assertArrayNotHasKey('upgrade-insecure-requests', $directives);
+        self::assertArrayHasKey('default-src', $directives);
+    }
+
+    public function testCandidatePolicyDropsTheDirectivesItCannotActOn(): void
+    {
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $extension->load([
+            'mulertech_csp' => [
+                'enabled' => true,
+                'report_only_directives' => ['style-src' => ["'self'"]],
+            ]
+        ], $container);
+
+        $arguments = $container->getDefinition('mulertech_csp.header_builder')->getArguments();
+        $candidate = $container->getDefinition('mulertech_csp.header_subscriber')->getArguments()['$candidateDirectives'];
+
+        self::assertArrayNotHasKey('upgrade-insecure-requests', $candidate);
+        // The enforced policy keeps it, only the report-only delivery drops it.
+        self::assertTrue($arguments['$directives']['upgrade-insecure-requests']);
+    }
+
+    public function testReportMarkersDefaultToBoth(): void
+    {
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $extension->load(['mulertech_csp' => ['enabled' => true]], $container);
+
+        $reportConfig = $container->getDefinition('mulertech_csp.header_builder')->getArguments()['$reportConfig'];
+
+        self::assertSame(['report-uri', 'report-to'], $reportConfig['markers']);
+    }
+
+    public function testReportMarkersAreRestrictedToTheKnownOnes(): void
+    {
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $this->expectException(InvalidConfigurationException::class);
+
+        $extension->load([
+            'mulertech_csp' => [
+                'enabled' => true,
+                'report' => ['markers' => ['report-uri', 'carrier-pigeon']],
+            ]
+        ], $container);
+    }
 }

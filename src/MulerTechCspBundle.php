@@ -38,6 +38,17 @@ final class MulerTechCspBundle extends AbstractBundle
         'upgrade-insecure-requests' => true,
     ];
 
+    /**
+     * Directives a report-only policy cannot act on, per the CSP specification.
+     * Emitting them there changes nothing and earns a console warning on every page load,
+     * and a console that warns on every page stops being read.
+     */
+    private const array IGNORED_WHEN_REPORT_ONLY = [
+        'upgrade-insecure-requests',
+        'sandbox',
+        'block-all-mixed-content',
+    ];
+
     public function configure(DefinitionConfigurator $definition): void
     {
         $definition->rootNode()
@@ -63,6 +74,15 @@ final class MulerTechCspBundle extends AbstractBundle
                             ->defaultValue(100)
                             ->min(0)
                             ->max(100)
+                        ->end()
+                        ->arrayNode('markers')
+                            ->scalarPrototype()->end()
+                            ->defaultValue(['report-uri', 'report-to'])
+                            ->requiresAtLeastOneElement()
+                            ->validate()
+                                ->ifTrue(static fn (array $markers): bool => [] !== array_diff($markers, ['report-uri', 'report-to']))
+                                ->thenInvalid('mulertech_csp.report.markers accepts "report-uri" and "report-to" only, got %s.')
+                            ->end()
                         ->end()
                     ->end()
                 ->end()
@@ -98,9 +118,14 @@ final class MulerTechCspBundle extends AbstractBundle
         }
 
         $directives = $this->applyOverrides(self::DEFAULT_DIRECTIVES, $userDirectives);
+
+        if (true === ($config['report_only'] ?? false)) {
+            $directives = $this->withoutDirectivesIgnoredWhenReportOnly($directives);
+        }
+
         $candidateDirectives = [] === $candidateOverrides
             ? []
-            : $this->applyOverrides($directives, $candidateOverrides);
+            : $this->withoutDirectivesIgnoredWhenReportOnly($this->applyOverrides($directives, $candidateOverrides));
 
         $container->services()
             ->set('mulertech_csp.nonce_generator', CspNonceGenerator::class)
@@ -113,7 +138,13 @@ final class MulerTechCspBundle extends AbstractBundle
                 '$nonceGenerator' => new Reference('mulertech_csp.nonce_generator'),
                 '$directives' => $directives,
                 '$alwaysAdd' => $config['always_add'] ?? [],
-                '$reportConfig' => $config['report'] ?? ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+                '$reportConfig' => $config['report'] ?? [
+                    'url' => null,
+                    'route' => null,
+                    'route_params' => [],
+                    'chance' => 100,
+                    'markers' => ['report-uri', 'report-to'],
+                ],
                 // Extensions are loaded against isolated containers, where the router is never visible yet:
                 // the reference must stay optional and be resolved when the real container compiles.
                 '$urlGenerator' => new Reference('router', ContainerInterface::NULL_ON_INVALID_REFERENCE),
@@ -155,6 +186,16 @@ final class MulerTechCspBundle extends AbstractBundle
 
         $container->services()
             ->alias(CspHeaderBuilder::class, 'mulertech_csp.header_builder');
+    }
+
+    /**
+     * @param array<string, list<string>|bool> $directives
+     *
+     * @return array<string, list<string>|bool>
+     */
+    private function withoutDirectivesIgnoredWhenReportOnly(array $directives): array
+    {
+        return array_diff_key($directives, array_flip(self::IGNORED_WHEN_REPORT_ONLY));
     }
 
     /**

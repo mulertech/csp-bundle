@@ -56,6 +56,7 @@ mulertech_csp:
         route: ~                     # Symfony route name (alternative to url)
         route_params: []             # Route parameters
         chance: 100                  # 0-100, % of requests with reporting
+        markers: ['report-uri', 'report-to']  # Which markers the policy advertises
     report_only_directives: []       # Candidate policy observed next to the enforced one
     directives:                      # Only override what you need
         default-src:
@@ -158,6 +159,19 @@ mulertech_csp:
 
 Both forms emit the same three markers: `report-uri` and `report-to csp-endpoint` inside the policy, plus a `Reporting-Endpoints` response header defining the `csp-endpoint` group. `report-uri` is deprecated but still the only form some browsers honour, hence the pair.
 
+#### Choosing the markers
+
+```yaml
+mulertech_csp:
+    report:
+        route: "app_csp_report"
+        markers: ['report-uri']
+```
+
+A policy carrying `report-to` makes every browser that implements the Reporting API ignore `report-uri` entirely and queue its reports for out-of-band, batched delivery. That delivery is deferred, and browsers are free to drop it: a violation shown in the console can reach the endpoint minutes later, or never. Dropping `report-to` restores an immediate POST that every browser performs, which is what a migration needs to measure anything at all.
+
+Keep both when reports are a background signal, keep `report-uri` alone when you need the data now. `Reporting-Endpoints` is only sent when `report-to` is among the markers, since it exists to define the group that marker names.
+
 ### Collecting violations
 
 The bundle ships a collector that reads both wire formats and hands each violation to the application. Declare the route yourself:
@@ -244,6 +258,8 @@ Read `disposition` on the received reports to tell them apart: `enforce` means t
 Since `report_only: true` already sends the whole policy as report-only, it leaves nothing to compare against: combining it with `report_only_directives` raises a configuration error when the container compiles.
 
 A listener that replaces the policy wholesale through `BuildCspHeaderEvent` leaves no configured policy to diff against, so the candidate stands down on those responses.
+
+Directives the specification ignores in a report-only delivery, namely `upgrade-insecure-requests`, `sandbox` and `block-all-mixed-content`, are dropped from the candidate, and from the whole policy under `report_only: true`. They would change nothing there and would earn a console warning on every page load.
 
 ## Usage
 
