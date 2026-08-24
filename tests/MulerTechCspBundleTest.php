@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace MulerTech\CspBundle\Tests;
 
+use MulerTech\CspBundle\Controller\CspReportController;
 use MulerTech\CspBundle\CspNonceGenerator;
 use MulerTech\CspBundle\MulerTechCspBundle;
+use MulerTech\CspBundle\Report\CspReportParser;
 use MulerTech\CspBundle\Service\CspHeaderBuilder;
 use MulerTech\CspBundle\Twig\CspExtension;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Reference;
@@ -429,5 +432,106 @@ final class MulerTechCspBundleTest extends TestCase
             ContainerInterface::NULL_ON_INVALID_REFERENCE,
             $args['$urlGenerator']->getInvalidBehavior(),
         );
+    }
+
+    public function testCandidateDirectivesAreADiffOfTheEnforcedPolicy(): void
+    {
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $extension->load([
+            'mulertech_csp' => [
+                'enabled' => true,
+                'directives' => [
+                    'style-src' => ["'self'", "'unsafe-inline'"],
+                    'img-src' => ["'self'", 'https://cdn.example.com'],
+                ],
+                'report_only_directives' => [
+                    'style-src' => ["'self'", 'nonce(main)'],
+                ],
+            ]
+        ], $container);
+
+        $args = $container->getDefinition('mulertech_csp.header_subscriber')->getArguments();
+        $candidate = $args['$candidateDirectives'];
+
+        self::assertSame(["'self'", 'nonce(main)'], $candidate['style-src']);
+        // Everything the candidate does not mention is inherited from the enforced policy,
+        // so the two differ only where the migration is actually happening.
+        self::assertSame(["'self'", 'https://cdn.example.com'], $candidate['img-src']);
+        self::assertSame(["'none'"], $candidate['object-src']);
+    }
+
+    public function testNoCandidateDirectivesByDefault(): void
+    {
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $extension->load(['mulertech_csp' => ['enabled' => true]], $container);
+
+        $args = $container->getDefinition('mulertech_csp.header_subscriber')->getArguments();
+
+        self::assertSame([], $args['$candidateDirectives']);
+    }
+
+    public function testCandidateDirectivesRefuseReportOnlyMode(): void
+    {
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/report_only_directives/');
+
+        $extension->load([
+            'mulertech_csp' => [
+                'enabled' => true,
+                'report_only' => true,
+                'report_only_directives' => [
+                    'style-src' => ["'self'"],
+                ],
+            ]
+        ], $container);
+    }
+
+    public function testLoadExtensionRegistersTheCollector(): void
+    {
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $extension->load(['mulertech_csp' => ['enabled' => true]], $container);
+
+        self::assertTrue($container->hasDefinition('mulertech_csp.report_parser'));
+        self::assertTrue($container->hasAlias(CspReportParser::class));
+
+        // The service id is the class name: that is what a route referencing the controller
+        // by FQCN resolves against.
+        self::assertTrue($container->hasDefinition(CspReportController::class));
+        self::assertNotSame([], $container->getDefinition(CspReportController::class)->getTag('controller.service_arguments'));
+    }
+
+    public function testDisabledBundleRegistersNoCollector(): void
+    {
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $extension->load(['mulertech_csp' => ['enabled' => false]], $container);
+
+        self::assertFalse($container->hasDefinition('mulertech_csp.report_parser'));
+        self::assertFalse($container->hasDefinition(CspReportController::class));
     }
 }

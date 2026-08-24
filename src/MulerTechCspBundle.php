@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace MulerTech\CspBundle;
 
+use MulerTech\CspBundle\Controller\CspReportController;
 use MulerTech\CspBundle\EventSubscriber\CspHeaderSubscriber;
+use MulerTech\CspBundle\Report\CspReportParser;
 use MulerTech\CspBundle\Service\CspHeaderBuilder;
 use MulerTech\CspBundle\Twig\CspExtension;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -68,6 +71,11 @@ final class MulerTechCspBundle extends AbstractBundle
                     ->useAttributeAsKey('name')
                     ->variablePrototype()->end()
                 ->end()
+                ->arrayNode('report_only_directives')
+                    ->normalizeKeys(false)
+                    ->useAttributeAsKey('name')
+                    ->variablePrototype()->end()
+                ->end()
             ->end();
     }
 
@@ -82,7 +90,17 @@ final class MulerTechCspBundle extends AbstractBundle
 
         /** @var array<string, array<int|string, string>|bool> $userDirectives */
         $userDirectives = $config['directives'] ?? [];
-        $directives = $this->mergeDirectives($userDirectives);
+        /** @var array<string, array<int|string, string>|bool> $candidateOverrides */
+        $candidateOverrides = $config['report_only_directives'] ?? [];
+
+        if ([] !== $candidateOverrides && ($config['report_only'] ?? false)) {
+            throw new InvalidConfigurationException('mulertech_csp: "report_only_directives" describes a candidate policy observed next to the enforced one, so it cannot be combined with "report_only: true", which already sends the whole policy as report-only. Keep "report_only: false" to compare an enforced policy with a candidate, or drop "report_only_directives" to observe a single policy.');
+        }
+
+        $directives = $this->applyOverrides(self::DEFAULT_DIRECTIVES, $userDirectives);
+        $candidateDirectives = [] === $candidateOverrides
+            ? []
+            : $this->applyOverrides($directives, $candidateOverrides);
 
         $container->services()
             ->set('mulertech_csp.nonce_generator', CspNonceGenerator::class)
@@ -107,8 +125,24 @@ final class MulerTechCspBundle extends AbstractBundle
                 '$builder' => new Reference('mulertech_csp.header_builder'),
                 '$dispatcher' => new Reference('event_dispatcher'),
                 '$reportOnly' => $config['report_only'] ?? false,
+                '$candidateDirectives' => $candidateDirectives,
             ])
             ->tag('kernel.event_subscriber');
+
+        $container->services()
+            ->set('mulertech_csp.report_parser', CspReportParser::class)
+            ->alias(CspReportParser::class, 'mulertech_csp.report_parser');
+
+        // The service id is the class name because that is what a route referencing the
+        // controller by FQCN resolves against. No route is declared here: opening a public
+        // unauthenticated endpoint stays an explicit gesture of the application.
+        $container->services()
+            ->set(CspReportController::class)
+            ->args([
+                '$parser' => new Reference('mulertech_csp.report_parser'),
+                '$dispatcher' => new Reference('event_dispatcher'),
+            ])
+            ->tag('controller.service_arguments');
 
         if (class_exists(AbstractExtension::class)) {
             $container->services()
@@ -124,26 +158,17 @@ final class MulerTechCspBundle extends AbstractBundle
     }
 
     /**
-     * @param array<string, array<int|string, string>|bool> $userDirectives
+     * @param array<string, list<string>|bool>              $base
+     * @param array<string, array<int|string, string>|bool> $overrides
      *
      * @return array<string, list<string>|bool>
      */
-    private function mergeDirectives(array $userDirectives): array
+    private function applyOverrides(array $base, array $overrides): array
     {
-        if ([] === $userDirectives) {
-            return self::DEFAULT_DIRECTIVES;
+        foreach ($overrides as $name => $value) {
+            $base[$name] = is_array($value) ? array_values($value) : $value;
         }
 
-        $merged = self::DEFAULT_DIRECTIVES;
-
-        foreach ($userDirectives as $name => $value) {
-            if (is_array($value)) {
-                $merged[$name] = array_values($value);
-            } else {
-                $merged[$name] = $value;
-            }
-        }
-
-        return $merged;
+        return $base;
     }
 }

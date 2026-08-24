@@ -26,9 +26,13 @@ final readonly class CspHeaderBuilder
     /**
      * @param array<string, list<string>|bool>|null $directivesOverride
      * @param list<string>|null                     $alwaysAddOverride
+     * @param bool|null                             $withReporting      decided per request by shouldReport() when omitted
      */
-    public function build(?array $directivesOverride = null, ?array $alwaysAddOverride = null): string
-    {
+    public function build(
+        ?array $directivesOverride = null,
+        ?array $alwaysAddOverride = null,
+        ?bool $withReporting = null,
+    ): string {
         $directives = $directivesOverride ?? $this->directives;
         $alwaysAdd = $alwaysAddOverride ?? $this->alwaysAdd;
         $parts = [];
@@ -49,15 +53,53 @@ final readonly class CspHeaderBuilder
             $resolvedSources = array_map($this->resolveSource(...), $sources);
 
             if ([] !== $alwaysAdd && !$this->isNoneOnly($resolvedSources)) {
-                $resolvedSources = array_unique(array_merge($resolvedSources, $alwaysAdd));
+                $resolvedSources = array_values(array_unique(array_merge($resolvedSources, $alwaysAdd)));
             }
 
             $parts[] = $directive.' '.implode(' ', $resolvedSources);
         }
 
-        $this->addReporting($parts);
+        $this->addReporting($parts, $withReporting ?? $this->drawSample());
 
         return implode('; ', $parts);
+    }
+
+    /**
+     * Whether this request carries reporting markers.
+     *
+     * The draw belongs to the request, not to the policy: a request emitting an enforced
+     * policy and a report-only candidate must sample both or neither, otherwise the two
+     * disagree and the collected data cannot be compared.
+     */
+    public function shouldReport(): bool
+    {
+        return null !== $this->getReportUrl() && $this->drawSample();
+    }
+
+    private function drawSample(): bool
+    {
+        return 100 === $this->reportConfig['chance']
+            || random_int(1, 100) <= $this->reportConfig['chance'];
+    }
+
+    /**
+     * Resolves the violation reporting endpoint, from the configured URL or the configured route.
+     */
+    public function getReportUrl(): ?string
+    {
+        if (null !== $this->reportConfig['url'] && '' !== $this->reportConfig['url']) {
+            return $this->reportConfig['url'];
+        }
+
+        if (null !== $this->reportConfig['route'] && '' !== $this->reportConfig['route'] && null !== $this->urlGenerator) {
+            return $this->urlGenerator->generate(
+                $this->reportConfig['route'],
+                $this->reportConfig['route_params'],
+                UrlGeneratorInterface::ABSOLUTE_URL,
+            );
+        }
+
+        return null;
     }
 
     private function resolveSource(string $source): string
@@ -80,39 +122,15 @@ final readonly class CspHeaderBuilder
     /**
      * @param list<string> $parts
      */
-    private function addReporting(array &$parts): void
+    private function addReporting(array &$parts, bool $withReporting): void
     {
         $reportUrl = $this->getReportUrl();
 
-        if (null === $reportUrl) {
-            return;
-        }
-
-        if ($this->reportConfig['chance'] < 100 && random_int(1, 100) > $this->reportConfig['chance']) {
+        if (!$withReporting || null === $reportUrl) {
             return;
         }
 
         $parts[] = 'report-uri '.$reportUrl;
         $parts[] = 'report-to csp-endpoint';
-    }
-
-    /**
-     * Resolves the violation reporting endpoint, from the configured URL or the configured route.
-     */
-    public function getReportUrl(): ?string
-    {
-        if (null !== $this->reportConfig['url'] && '' !== $this->reportConfig['url']) {
-            return $this->reportConfig['url'];
-        }
-
-        if (null !== $this->reportConfig['route'] && '' !== $this->reportConfig['route'] && null !== $this->urlGenerator) {
-            return $this->urlGenerator->generate(
-                $this->reportConfig['route'],
-                $this->reportConfig['route_params'],
-                UrlGeneratorInterface::ABSOLUTE_URL,
-            );
-        }
-
-        return null;
     }
 }

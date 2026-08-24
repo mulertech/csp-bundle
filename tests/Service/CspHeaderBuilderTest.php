@@ -236,4 +236,82 @@ final class CspHeaderBuilderTest extends TestCase
             $reportConfig,
         );
     }
+
+    public function testShouldReportIsFalseWithoutEndpoint(): void
+    {
+        $builder = new CspHeaderBuilder(
+            $this->nonceGenerator,
+            ['default-src' => ["'self'"]],
+            [],
+            ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+        );
+
+        self::assertFalse($builder->shouldReport());
+    }
+
+    public function testShouldReportIsTrueWithEndpointAndFullChance(): void
+    {
+        $builder = new CspHeaderBuilder(
+            $this->nonceGenerator,
+            ['default-src' => ["'self'"]],
+            [],
+            ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100],
+        );
+
+        self::assertTrue($builder->shouldReport());
+    }
+
+    public function testShouldReportIsFalseWithZeroChance(): void
+    {
+        $builder = new CspHeaderBuilder(
+            $this->nonceGenerator,
+            ['default-src' => ["'self'"]],
+            [],
+            ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 0],
+        );
+
+        self::assertFalse($builder->shouldReport());
+    }
+
+    public function testReportingDecisionCanBeForcedOff(): void
+    {
+        $builder = new CspHeaderBuilder(
+            $this->nonceGenerator,
+            ['default-src' => ["'self'"]],
+            [],
+            ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100],
+        );
+
+        self::assertSame("default-src 'self'", $builder->build(withReporting: false));
+    }
+
+    public function testForcedReportingStaysSilentWithoutEndpoint(): void
+    {
+        $builder = new CspHeaderBuilder(
+            $this->nonceGenerator,
+            ['default-src' => ["'self'"]],
+            [],
+            ['url' => null, 'route' => null, 'route_params' => [], 'chance' => 100],
+        );
+
+        self::assertSame("default-src 'self'", $builder->build(withReporting: true));
+    }
+
+    public function testRouteIsResolvedOncePerBuild(): void
+    {
+        $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
+        $urlGenerator->expects(self::once())
+            ->method('generate')
+            ->willReturn('https://example.com/csp-report');
+
+        $builder = new CspHeaderBuilder(
+            $this->nonceGenerator,
+            ['default-src' => ["'self'"]],
+            [],
+            ['url' => null, 'route' => 'csp_report', 'route_params' => [], 'chance' => 100],
+            $urlGenerator,
+        );
+
+        $builder->build();
+    }
 }

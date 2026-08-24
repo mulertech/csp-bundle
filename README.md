@@ -56,6 +56,7 @@ mulertech_csp:
         route: ~                     # Symfony route name (alternative to url)
         route_params: []             # Route parameters
         chance: 100                  # 0-100, % of requests with reporting
+    report_only_directives: []       # Candidate policy observed next to the enforced one
     directives:                      # Only override what you need
         default-src:
             - "'self'"
@@ -118,7 +119,7 @@ mulertech_csp:
             - "nonce(analytics)"      # For analytics scripts
 ```
 
-Each named nonce generates a unique 256-bit (32 bytes) cryptographically secure value, and every request gets fresh ones. Persistent runtimes — FrankenPHP worker mode, RoadRunner, Swoole — keep services alive across requests, so the generator is tagged `kernel.reset`: a nonce reused from one page to the next would be readable by an attacker before the injection.
+Each named nonce generates a unique 256-bit (32 bytes) cryptographically secure value, and every request gets fresh ones. Persistent runtimes (FrankenPHP worker mode, RoadRunner, Swoole) keep services alive across requests, so the generator is tagged `kernel.reset`: a nonce reused from one page to the next would be readable by an attacker before the injection.
 
 ### always_add
 
@@ -157,6 +158,54 @@ mulertech_csp:
 
 Both forms emit the same three markers: `report-uri` and `report-to csp-endpoint` inside the policy, plus a `Reporting-Endpoints` response header defining the `csp-endpoint` group. `report-uri` is deprecated but still the only form some browsers honour, hence the pair.
 
+### Collecting violations
+
+The bundle ships a collector that reads both wire formats and hands each violation to the application. Declare the route yourself:
+
+```yaml
+# config/routes/mulertech_csp.yaml
+mulertech_csp_report:
+    path: /csp-report
+    controller: MulerTech\CspBundle\Controller\CspReportController
+    methods: [POST]
+```
+
+The bundle declares no route on its own: the endpoint is public and unauthenticated by nature, so opening it stays an explicit gesture of the application, which is also where rate limiting belongs.
+
+Then listen to the violations and decide where they go:
+
+```php
+use MulerTech\CspBundle\Event\CspViolationReportedEvent;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+
+#[AsEventListener(event: CspViolationReportedEvent::NAME)]
+class CspViolationListener
+{
+    public function __invoke(CspViolationReportedEvent $event): void
+    {
+        $report = $event->getReport();
+
+        $this->logger->warning('CSP violation', [
+            'signature' => $report->signature(),
+            'directive' => $report->effectiveDirective,
+            'blocked' => $report->blockedOrigin(),
+            'document' => $report->documentPath(),
+            'enforced' => $report->isEnforced(),
+        ]);
+    }
+}
+```
+
+What the collector settles before dispatching:
+
+- the legacy `application/csp-report` object and the Reporting API list are normalised into one `CspViolationReport`, since a policy advertising both markers receives the same violation twice;
+- violations injected by browser extensions (`chrome-extension:`, `moz-extension:` and their kin) are dropped, as they belong to the visitor's browser and would bury the real signal;
+- a body over 64 KB answers `413`, a payload that is not JSON answers `400`, anything else answers `204`.
+
+`CspViolationReport::signature()` identifies a violation by directive, document path and blocked origin. Line and column numbers are left out on purpose: they drift with every edit of the page, and keying on them would announce the same violation as new every time. Deduplicate on the signature to notify once per distinct violation instead of once per page view.
+
+The report carries `originalPolicy` as the browser sent it, which is long: `disposition` is the field that tells an enforced block from a candidate observation.
+
 ### Report-only mode
 
 Test your CSP policy without enforcing it:
@@ -167,6 +216,34 @@ mulertech_csp:
 ```
 
 This sets the `Content-Security-Policy-Report-Only` header instead of `Content-Security-Policy`.
+
+### Candidate policy
+
+Observe a stricter policy on real traffic while the current one keeps protecting the site:
+
+```yaml
+mulertech_csp:
+    directives:
+        style-src:
+            - "'self'"
+            - "'unsafe-inline'"
+    report_only_directives:
+        style-src:
+            - "'self'"
+            - "nonce(main)"
+    report:
+        route: "app_csp_report"
+```
+
+The response then carries two policies: `Content-Security-Policy` with the enforced one, and `Content-Security-Policy-Report-Only` with the candidate. Nothing new is blocked, and the browser reports everything the candidate would have blocked, so a policy is tightened on measurements instead of guesswork.
+
+`report_only_directives` is a diff of the enforced policy rather than a policy of its own: every directive it does not mention is inherited, so the two differ only where the migration is happening. Both share the same nonces and the same endpoint, and a request sampled in by `chance` is sampled in for both, so the two sets of reports are always comparable.
+
+Read `disposition` on the received reports to tell them apart: `enforce` means the resource is blocked right now, `report` means it would be blocked once the candidate is enforced.
+
+Since `report_only: true` already sends the whole policy as report-only, it leaves nothing to compare against: combining it with `report_only_directives` raises a configuration error when the container compiles.
+
+A listener that replaces the policy wholesale through `BuildCspHeaderEvent` leaves no configured policy to diff against, so the candidate stands down on those responses.
 
 ## Usage
 
