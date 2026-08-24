@@ -1,5 +1,37 @@
 # Release notes for csp-bundle
 
+## v2.2.0 - 2026-08-24
+
+New features:
+
+- Candidate policy: `report_only_directives` emits a stricter policy as `Content-Security-Policy-Report-Only`
+  next to the enforced one, so a policy is tightened on measurements instead of guesswork. It is a diff of the
+  enforced policy: every directive it does not mention is inherited. Both policies share the same nonces and the
+  same endpoint, and one sampling draw covers both, so their reports are always comparable. Read `disposition`
+  on the received reports to tell an enforced block from a candidate observation.
+- Violation collector: `CspReportController` reads the legacy `application/csp-report` object and the Reporting
+  API list alike, normalises them into a single `CspViolationReport` and dispatches one
+  `CspViolationReportedEvent` per violation. Violations injected by browser extensions are dropped, a body over
+  64 KB answers `413`, a payload that is not JSON answers `400`. The bundle declares no route: opening a public
+  unauthenticated endpoint stays an explicit gesture of the application, which is also where rate limiting belongs.
+- `CspViolationReport::signature()` identifies a violation by directive, document path and blocked origin, leaving
+  out line and column numbers, which drift with every edit of the page. Deduplicate on it to notify once per
+  distinct violation instead of once per page view.
+
+Changes:
+
+- `report_only_directives` combined with `report_only: true` raises a configuration error when the container
+  compiles: a policy sent entirely as report-only has nothing to compare against
+- `CspHeaderBuilder::build()` accepts a `withReporting` argument, so both policies of a request share one
+  sampling decision
+- `CspHeaderBuilder::shouldReport()` is public: it resolves the endpoint and draws the sample
+- `CspHeaderSubscriber` takes the candidate directives as a fourth argument, empty by default
+- `build()` resolves the reporting route once per policy instead of twice
+
+Documentation:
+
+- Candidate policy and violation collection documented, including how `disposition` separates the two
+
 ## v2.1.0 - 2026-08-19
 
 Fixes:
