@@ -1,5 +1,29 @@
 # Release notes for csp-bundle
 
+## v2.3.0 - 2026-08-24
+
+New features:
+
+- `report.markers` chooses which markers the policy advertises: `report-uri`, `report-to`, or both,
+  which stays the default. A policy carrying `report-to` makes every browser implementing the
+  Reporting API ignore `report-uri` and queue its reports for out-of-band, batched delivery. That
+  delivery is deferred and browsers may drop it, so a violation shown in the console can reach the
+  endpoint minutes later, or never. Dropping `report-to` restores an immediate POST that every
+  browser performs, which is what a migration needs to measure anything at all.
+- `Reporting-Endpoints` is only sent when `report-to` is among the markers, since the header exists
+  to define the group that marker names.
+
+Fixes:
+
+- Report-only policies no longer carry the directives the specification ignores there, namely
+  `upgrade-insecure-requests`, `sandbox` and `block-all-mixed-content`. They changed nothing and
+  earned a browser console warning on every page load. This covers the candidate policy and the
+  whole policy under `report_only: true`.
+
+Changes:
+
+- `CspHeaderBuilder` takes the advertised markers in the `markers` key of its `$reportConfig`
+
 ## v2.2.0 - 2026-08-24
 
 New features:
