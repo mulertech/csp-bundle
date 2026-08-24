@@ -611,4 +611,29 @@ final class MulerTechCspBundleTest extends TestCase
             ]
         ], $container);
     }
+
+    public function testSecureDefaults(): void
+    {
+        $container = $this->createContainer();
+        $this->bundle->build($container);
+
+        $extension = $this->bundle->getContainerExtension();
+        self::assertNotNull($extension);
+
+        $extension->load(['mulertech_csp' => ['enabled' => true]], $container);
+
+        $directives = $container->getDefinition('mulertech_csp.header_builder')->getArguments()['$directives'];
+
+        // The security contract of the bundle. Loosening any of these is a deliberate act of the
+        // application, never a side effect of a change here.
+        self::assertSame(["'self'"], $directives['default-src']);
+        self::assertSame(["'self'", 'nonce(main)'], $directives['script-src']);
+        self::assertSame(["'self'", 'nonce(main)'], $directives['style-src']);
+        self::assertSame(["'none'"], $directives['object-src']);
+        self::assertSame(["'none'"], $directives['frame-src']);
+        self::assertSame(["'none'"], $directives['frame-ancestors']);
+        self::assertSame(["'none'"], $directives['base-uri']);
+        self::assertSame(["'self'"], $directives['form-action']);
+        self::assertTrue($directives['upgrade-insecure-requests']);
+    }
 }

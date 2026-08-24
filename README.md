@@ -34,12 +34,10 @@ The bundle ships with secure defaults for every directive and works with no conf
 ```yaml
 mulertech_csp:
     directives:
-        script-src:
+        img-src:
             - "'self'"
-            - "nonce(main)"
-        style-src:
-            - "'self'"
-            - "'unsafe-inline'"
+            - "data:"
+            - "https://cdn.example.com"
 ```
 
 ### Full reference
@@ -66,7 +64,7 @@ mulertech_csp:
             - "nonce(main)"
         style-src:
             - "'self'"
-            - "'unsafe-inline'"
+            - "nonce(main)"
         img-src:
             - "'self'"
             - "data:"
@@ -83,7 +81,7 @@ mulertech_csp:
         frame-ancestors:
             - "'none'"
         base-uri:
-            - "'self'"
+            - "'none'"
         form-action:
             - "'self'"
         upgrade-insecure-requests: true
@@ -95,7 +93,7 @@ mulertech_csp:
 |---|---|
 | `default-src` | `'self'` |
 | `script-src` | `'self'` + `nonce(main)` |
-| `style-src` | `'self' 'unsafe-inline'` |
+| `style-src` | `'self'` + `nonce(main)` |
 | `img-src` | `'self' data:` |
 | `font-src` | `'self'` |
 | `connect-src` | `'self'` |
@@ -103,7 +101,7 @@ mulertech_csp:
 | `object-src` | `'none'` |
 | `frame-src` | `'none'` |
 | `frame-ancestors` | `'none'` |
-| `base-uri` | `'self'` |
+| `base-uri` | `'none'` |
 | `form-action` | `'self'` |
 | `upgrade-insecure-requests` | `true` |
 
@@ -314,6 +312,46 @@ class MyService
     }
 }
 ```
+
+## Upgrading from v2.x
+
+### Breaking changes
+
+1. **`style-src` no longer allows inline styles**
+
+```
+# v2.x
+style-src 'self' 'unsafe-inline'
+
+# v3.0
+style-src 'self' 'nonce-...'
+```
+
+A policy that allows any inline style lets an injection read form values through attribute
+selectors and cover the page with its own interface, which is most of what a script would have
+done. The two forms never cohabit: a nonce makes browsers ignore `'unsafe-inline'` entirely.
+
+Every `<style>` element served to a browser now needs `nonce="{{ csp_nonce('main') }}"`, and every
+`style="..."` attribute stops being applied, silently, with no server-side error. An attribute
+carries neither a nonce nor a usable hash, so it has to be rewritten as a class or as a rule in a
+nonced block.
+
+Measure before you switch: keep the old policy enforced and put the new one under
+`report_only_directives`, then read the violations for as long as it takes to see the whole site.
+An application that genuinely needs inline styles opts back in explicitly:
+
+```yaml
+mulertech_csp:
+    directives:
+        style-src:
+            - "'self'"
+            - "'unsafe-inline'"
+```
+
+2. **`base-uri` is `'none'`**
+
+An injected `<base>` rewrites how every relative URL on the page resolves. Applications using a
+`<base>` tag set `base-uri: ["'self'"]` back.
 
 ## Upgrading from v1.x
 

@@ -22,10 +22,21 @@ final class MulerTechCspBundle extends AbstractBundle
 {
     protected string $extensionAlias = 'mulertech_csp';
 
+    /**
+     * Secure defaults. Two of them deserve their reason in writing:
+     *
+     * style-src carries a nonce rather than 'unsafe-inline', because a policy that allows any
+     * inline style lets an injection read form values through attribute selectors and cover the
+     * page with its own interface. The two never cohabit: a nonce makes browsers ignore
+     * 'unsafe-inline' entirely, so an application needing inline styles opts back in explicitly.
+     *
+     * base-uri is 'none' rather than 'self', because an injected <base> rewrites how every
+     * relative URL on the page resolves, and virtually no application uses that tag.
+     */
     private const array DEFAULT_DIRECTIVES = [
         'default-src' => ["'self'"],
         'script-src' => ["'self'", 'nonce(main)'],
-        'style-src' => ["'self'", "'unsafe-inline'"],
+        'style-src' => ["'self'", 'nonce(main)'],
         'img-src' => ["'self'", 'data:'],
         'font-src' => ["'self'"],
         'connect-src' => ["'self'"],
@@ -33,7 +44,7 @@ final class MulerTechCspBundle extends AbstractBundle
         'object-src' => ["'none'"],
         'frame-src' => ["'none'"],
         'frame-ancestors' => ["'none'"],
-        'base-uri' => ["'self'"],
+        'base-uri' => ["'none'"],
         'form-action' => ["'self'"],
         'upgrade-insecure-requests' => true,
     ];
