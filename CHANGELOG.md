@@ -1,5 +1,20 @@
 # Release notes for csp-bundle
 
+## v3.1.0 - 2026-09-07
+
+New features:
+
+- The policy is sent whole on responses the browser renders as one of your documents, `text/html` and `application/xhtml+xml`, and on responses declaring no type, which the framework settles to HTML. Any other response carries `frame-ancestors` and `sandbox` alone, and no header when neither is configured. Opened directly, an image, a PDF or a sitemap is displayed inside a document the browser builds and styles itself: the whole policy governs that generated document, blocks the viewer's own styling and reports a `style-src-elem` or `style-src-attr` violation nothing in the application can act on.
+- `CspHeaderBuilder::buildForResource()` exposes that reduced policy.
+
+Fixes:
+
+- The violation collector drops what a userscript manager injects, reported under the `user-script` source file by Violentmonkey and Tampermonkey alike.
+
+Documentation:
+
+- Collection is documented as an instrument of migration, branched for the duration of a tightening and unbranched afterwards, with the noise floor of a public site spelled out and a functional test named as the channel that covers the actionable case.
+
 ## v3.0.0 - 2026-08-24
 
 BREAKING CHANGES:
