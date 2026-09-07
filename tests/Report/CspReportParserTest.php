@@ -205,6 +205,21 @@ final class CspReportParserTest extends TestCase
         self::assertSame([], $reports);
     }
 
+    public function testDropsViolationsRaisedFromAUserscriptManager(): void
+    {
+        $reports = $this->parser->parse((string) json_encode([
+            'csp-report' => [
+                'document-uri' => 'https://example.com/',
+                'violated-directive' => 'style-src-elem',
+                'blocked-uri' => 'inline',
+                'source-file' => 'user-script',
+                'line-number' => 947,
+            ],
+        ]));
+
+        self::assertSame([], $reports);
+    }
+
     public function testDropsViolationsRaisedOnBlankDocuments(): void
     {
         foreach (['about:blank', 'about:srcdoc'] as $documentUri) {

@@ -8,6 +8,7 @@ use MulerTech\CspBundle\CspNonceGenerator;
 use MulerTech\CspBundle\Event\BuildCspHeaderEvent;
 use MulerTech\CspBundle\EventSubscriber\CspHeaderSubscriber;
 use MulerTech\CspBundle\Service\CspHeaderBuilder;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpFoundation\Request;
@@ -370,6 +371,114 @@ final class CspHeaderSubscriberTest extends TestCase
     }
 
     /**
+     * @return list<array{string}>
+     */
+    public static function documentTypeProvider(): array
+    {
+        return [
+            ['text/html; charset=UTF-8'],
+            ['application/xhtml+xml'],
+        ];
+    }
+
+    #[DataProvider('documentTypeProvider')]
+    public function testDocumentResponseCarriesTheWholePolicy(string $contentType): void
+    {
+        $subscriber = $this->createSubscriber([
+            'default-src' => ["'self'"],
+            'frame-ancestors' => ["'none'"],
+        ]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST, $contentType);
+        $subscriber->onKernelResponse($event);
+
+        self::assertSame(
+            "default-src 'self'; frame-ancestors 'none'",
+            $event->getResponse()->headers->get('Content-Security-Policy'),
+        );
+    }
+
+    /**
+     * A browser opening an image or a sitemap wraps it in a document of its own making, styled
+     * inline. The whole policy would block that styling and report a violation the application
+     * cannot act on, so only what still describes the resource is sent.
+     */
+    public function testResourceResponseCarriesOnlyTheDirectivesThatSurvive(): void
+    {
+        $subscriber = $this->createSubscriber([
+            'default-src' => ["'self'"],
+            'style-src' => ["'self'", 'nonce(main)'],
+            'frame-ancestors' => ["'none'"],
+            'upgrade-insecure-requests' => true,
+        ]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST, 'image/webp');
+        $subscriber->onKernelResponse($event);
+
+        self::assertSame(
+            "frame-ancestors 'none'",
+            $event->getResponse()->headers->get('Content-Security-Policy'),
+        );
+    }
+
+    public function testResourceResponseCarriesNoHeaderWhenNothingSurvives(): void
+    {
+        $subscriber = $this->createSubscriber([
+            'default-src' => ["'self'"],
+            'style-src' => ["'self'", 'nonce(main)'],
+        ]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST, 'application/xml');
+        $subscriber->onKernelResponse($event);
+
+        self::assertFalse($event->getResponse()->headers->has('Content-Security-Policy'));
+    }
+
+    /**
+     * The framework settles an unstated type to HTML, so an unstated type is covered as a
+     * document: the policy is never dropped on a page for want of a declaration.
+     */
+    public function testResponseWithoutContentTypeIsTreatedAsADocument(): void
+    {
+        $subscriber = $this->createSubscriber(['default-src' => ["'self'"]]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST);
+        $subscriber->onKernelResponse($event);
+
+        self::assertSame("default-src 'self'", $event->getResponse()->headers->get('Content-Security-Policy'));
+    }
+
+    public function testResourceResponseCarriesNoCandidatePolicy(): void
+    {
+        $subscriber = $this->createSubscriber(
+            ['default-src' => ["'self'"], 'frame-ancestors' => ["'none'"]],
+            candidateDirectives: ['default-src' => ["'none'"], 'frame-ancestors' => ["'none'"]],
+        );
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST, 'application/pdf');
+        $subscriber->onKernelResponse($event);
+
+        self::assertFalse($event->getResponse()->headers->has('Content-Security-Policy-Report-Only'));
+    }
+
+    /**
+     * A listener replacing the policy states what it wants sent, whatever the response carries.
+     */
+    public function testOverriddenPolicyIsSentOnAResourceAsWell(): void
+    {
+        $this->dispatcher->addListener(BuildCspHeaderEvent::NAME, static function (BuildCspHeaderEvent $event): void {
+            $event->setHeaderValue("default-src 'none'");
+        });
+
+        $subscriber = $this->createSubscriber(['default-src' => ["'self'"]]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST, 'application/xml');
+        $subscriber->onKernelResponse($event);
+
+        self::assertSame("default-src 'none'", $event->getResponse()->headers->get('Content-Security-Policy'));
+    }
+
+    /**
      * @param array<string, list<string>|bool>                                                      $directives
      * @param array{url: ?string, route: ?string, route_params: array<string, string>, chance: int} $reportConfig
      * @param array<string, list<string>|bool>                                                      $candidateDirectives
@@ -395,10 +504,15 @@ final class CspHeaderSubscriberTest extends TestCase
         return $subscriber;
     }
 
-    private function createResponseEvent(int $requestType): ResponseEvent
+    private function createResponseEvent(int $requestType, ?string $contentType = null): ResponseEvent
     {
         $kernel = $this->createStub(HttpKernelInterface::class);
+        $response = new Response();
 
-        return new ResponseEvent($kernel, new Request(), $requestType, new Response());
+        if (null !== $contentType) {
+            $response->headers->set('Content-Type', $contentType);
+        }
+
+        return new ResponseEvent($kernel, new Request(), $requestType, $response);
     }
 }

@@ -18,6 +18,10 @@ final class CspReportParser
      * Sources that say nothing about the site's own policy. Browser extensions inject scripts
      * and styles into every page they open, and the browser reports those injections against
      * the page's policy. Left in, they drown the real signal.
+     *
+     * `user-script` is not a scheme: it is the source file a userscript manager reports for
+     * the code it injects, Violentmonkey and Tampermonkey alike. A real source file always
+     * carries a scheme, so the value cannot collide with one of ours.
      */
     private const array NOISE_PREFIXES = [
         'chrome-extension:',
@@ -28,6 +32,7 @@ final class CspReportParser
         'webkit-masked-url:',
         'resource:',
         'chrome:',
+        'user-script',
     ];
 
     private const array NOISE_DOCUMENTS = [

@@ -10,6 +10,11 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 final readonly class CspHeaderBuilder
 {
     /**
+     * Directives that keep their meaning on a resource served outside a document of ours.
+     */
+    private const array RESOURCE_DIRECTIVES = ['frame-ancestors', 'sandbox'];
+
+    /**
      * @param array<string, list<string>|bool>                                                                             $directives
      * @param list<string>                                                                                                 $alwaysAdd
      * @param array{url: ?string, route: ?string, route_params: array<string, string>, chance: int, markers: list<string>} $reportConfig
@@ -62,6 +67,29 @@ final readonly class CspHeaderBuilder
         $this->addReporting($parts, $withReporting ?? $this->drawSample());
 
         return implode('; ', $parts);
+    }
+
+    /**
+     * Policy for a response the browser does not render as one of our documents: an image, a
+     * PDF, a feed, a sitemap. Opened directly, those are displayed inside a document the
+     * browser builds itself, styled with its own inline stylesheet and, for an image, its own
+     * style attribute. The full policy governs that generated document, blocks the viewer's
+     * own styling and reports a violation nothing in the application can act on.
+     *
+     * What survives is what still describes the resource rather than the viewer around it:
+     * `frame-ancestors` keeps a PDF or an image out of a foreign frame, `sandbox` keeps its
+     * restrictions. Reporting markers are dropped with the rest, since what remains cannot be
+     * violated by the viewer.
+     */
+    public function buildForResource(): string
+    {
+        $kept = array_intersect_key($this->directives, array_flip(self::RESOURCE_DIRECTIVES));
+
+        if ([] === $kept) {
+            return '';
+        }
+
+        return $this->build($kept, withReporting: false);
     }
 
     /**

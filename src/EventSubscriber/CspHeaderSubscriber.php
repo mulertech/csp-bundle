@@ -18,6 +18,14 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
     private const string REPORT_ONLY_HEADER = 'Content-Security-Policy-Report-Only';
 
     /**
+     * Types the browser renders as one of our documents, and the only ones the whole policy
+     * describes. A response declaring anything else gets the reduced policy of
+     * CspHeaderBuilder::buildForResource(); a response declaring no type at all is treated as
+     * a document, since that is what the framework settles it to.
+     */
+    private const array DOCUMENT_TYPES = ['text/html', 'application/xhtml+xml'];
+
+    /**
      * @param array<string, list<string>|bool> $candidateDirectives
      */
     public function __construct(
@@ -52,16 +60,47 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
         $this->dispatcher->dispatch($cspEvent, BuildCspHeaderEvent::NAME);
 
         $overridden = $cspEvent->getHeaderValue();
+
+        if (null === $overridden && !$this->isDocument($response)) {
+            $this->setHeader($response, $headerName, $this->builder->buildForResource());
+
+            return;
+        }
+
         $withReporting = $this->builder->shouldReport();
         $headerValue = $overridden ?? $this->builder->build(withReporting: $withReporting);
 
-        if ('' !== $headerValue) {
-            $response->headers->set($headerName, $headerValue);
-        }
+        $this->setHeader($response, $headerName, $headerValue);
 
         $candidateValue = $this->addCandidateHeader($response, $overridden, $withReporting);
 
         $this->addReportingEndpointsHeader($response, $headerValue.' '.$candidateValue);
+    }
+
+    private function isDocument(Response $response): bool
+    {
+        $contentType = $response->headers->get('Content-Type');
+
+        if (null === $contentType) {
+            return true;
+        }
+
+        foreach (self::DOCUMENT_TYPES as $documentType) {
+            if (str_starts_with($contentType, $documentType)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function setHeader(Response $response, string $headerName, string $value): void
+    {
+        if ('' === $value) {
+            return;
+        }
+
+        $response->headers->set($headerName, $value);
     }
 
     /**

@@ -105,6 +105,23 @@ mulertech_csp:
 | `form-action` | `'self'` |
 | `upgrade-insecure-requests` | `true` |
 
+### Responses that are not documents
+
+The whole policy is sent on responses the browser renders as one of your documents, `text/html`
+and `application/xhtml+xml`, and on responses declaring no type at all, which the framework
+settles to HTML.
+
+Everything else, an image, a PDF, a sitemap, a feed, gets a reduced policy holding
+`frame-ancestors` and `sandbox` alone, and no header at all when neither is configured. Opened
+directly, those resources are displayed inside a document the browser builds itself and styles
+with its own inline stylesheet, and, for an image, its own style attribute. The whole policy
+governs that generated document: it blocks the viewer's own styling and, where reporting is on,
+reports a violation on `style-src-elem` or `style-src-attr` that nothing in the application can
+act on. What is kept is what still describes the resource rather than the viewer around it.
+
+A listener replacing the policy through `BuildCspHeaderEvent` states what it wants sent, and is
+applied whatever the response carries.
+
 ### Named nonces
 
 Use `nonce(handle)` syntax in directives to create named nonces:
@@ -172,6 +189,19 @@ Keep both when reports are a background signal, keep `report-uri` alone when you
 
 ### Collecting violations
 
+Collection is an instrument of migration. It turns a guess about what a stricter policy would
+break into an inventory measured on real traffic, which is what the candidate policy below is
+for, and it is worth branching for the duration of a tightening.
+
+It is not permanent monitoring. On a public site, the steady-state volume is what the visitors'
+own browsers inject into the page: extensions, userscript managers, in-app browsers. Those
+arrive as `inline`, `eval` or `blob` against your page's URL, they are indistinguishable from a
+block of yours served without a nonce, and no change on your side addresses them. The violation
+you can act on comes from a template serving an inline block without a nonce, and that one
+fires on every view of the page: a functional test asserting every inline `<script>` and
+`<style>` carries a nonce catches it on the branch, before a visitor meets it. Unbranch the
+collector once the policy is enforced and stable.
+
 The bundle ships a collector that reads both wire formats and hands each violation to the application. Declare the route yourself:
 
 ```yaml
@@ -211,7 +241,7 @@ class CspViolationListener
 What the collector settles before dispatching:
 
 - the legacy `application/csp-report` object and the Reporting API list are normalised into one `CspViolationReport`, since a policy advertising both markers receives the same violation twice;
-- violations injected by browser extensions (`chrome-extension:`, `moz-extension:` and their kin) are dropped, as they belong to the visitor's browser and would bury the real signal;
+- violations injected by browser extensions (`chrome-extension:`, `moz-extension:` and their kin) are dropped, as they belong to the visitor's browser and would bury the real signal, and so are those a userscript manager reports under the `user-script` source file;
 - a body over 64 KB answers `413`, a payload that is not JSON answers `400`, anything else answers `204`.
 
 `CspViolationReport::signature()` identifies a violation by directive, document path and blocked origin. Line and column numbers are left out on purpose: they drift with every edit of the page, and keying on them would announce the same violation as new every time. Deduplicate on the signature to notify once per distinct violation instead of once per page view.

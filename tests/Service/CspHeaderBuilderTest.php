@@ -219,6 +219,33 @@ final class CspHeaderBuilderTest extends TestCase
         self::assertSame('', $header);
     }
 
+    public function testResourcePolicyKeepsOnlyWhatGovernsTheResource(): void
+    {
+        $builder = $this->createBuilder(
+            directives: [
+                'default-src' => ["'self'"],
+                'style-src' => ["'self'", 'nonce(main)'],
+                'frame-ancestors' => ["'none'"],
+                'upgrade-insecure-requests' => true,
+            ],
+            reportConfig: ['url' => 'https://report.example.com/csp', 'route' => null, 'route_params' => [], 'chance' => 100, 'markers' => ['report-uri']],
+        );
+
+        $header = $builder->buildForResource();
+
+        self::assertSame("frame-ancestors 'none'", $header);
+    }
+
+    public function testResourcePolicyIsEmptyWithoutADirectiveThatSurvives(): void
+    {
+        $builder = $this->createBuilder([
+            'default-src' => ["'self'"],
+            'script-src' => ["'self'"],
+        ]);
+
+        self::assertSame('', $builder->buildForResource());
+    }
+
     /**
      * @param array<string, list<string>|bool>                                                      $directives
      * @param list<string>                                                                          $alwaysAdd
