@@ -122,6 +122,35 @@ act on. What is kept is what still describes the resource rather than the viewer
 A listener replacing the policy through `BuildCspHeaderEvent` states what it wants sent, and is
 applied whatever the response carries.
 
+### Serving a page under a nonce policy
+
+A nonce in `style-src` makes the browser ignore `'unsafe-inline'` entirely: the two never cohabit.
+Three things stop working, all of them silently, with a 200 response and a page that still renders.
+
+**A `style` attribute** carries neither a nonce nor a usable hash. It is rewritten, not worked
+around. A fixed value becomes a class. A value that comes from data is better removed altogether:
+a choice among a closed palette gives a class the template can write, and the problem disappears.
+When a computed value is unavoidable, it goes into a `<style nonce="…">` block with a selector by
+`id` — with one exception below.
+
+**An inline event handler** (`onclick`, `onsubmit`) needs `'unsafe-inline'` in `script-src`, which
+the nonce cancels. It never runs, so a delete button does nothing, or a confirmation disappears and
+the deletion goes through unannounced. It moves into a module served from `'self'`, asked for by a
+`data-` attribute.
+
+**A `<style>` block in an application driven by Turbo.** Turbo copies the `<style>` elements of the
+page it fetches into the current document as they are, while it re-nonces `<script>` elements from
+`<meta name="csp-nonce">`. The block therefore arrives carrying the nonce of its own response, which
+the displayed document's policy refuses. The failure appears only when reaching the page through a
+link, never on a reload, which makes it easy to miss. Under Turbo, use the CSSOM instead: a style
+written by script goes through no nonce check at all.
+
+A library that injects its own inline block reads its nonce where it expects to: Turbo, for the
+stylesheet of its progress bar, reads `<meta name="csp-nonce">`. Carry the value in the element's
+`nonce` attribute rather than in `content`: the browser hides a `nonce` attribute from the DOM while
+leaving it readable through the `.nonce` property, which Turbo queries first, whereas `content`
+leaves the value in plain sight for any script.
+
 ### Named nonces
 
 Use `nonce(handle)` syntax in directives to create named nonces:
