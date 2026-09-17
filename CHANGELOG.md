@@ -1,5 +1,21 @@
 # Release notes for csp-bundle
 
+## v3.2.0 - 2026-09-17
+
+New features:
+
+- `CspHeaderBuilder::build()` accepts an optional `plainLoopbackOrigin` argument that leaves `upgrade-insecure-requests` out of the built policy. Existing calls are unaffected.
+
+Fixes:
+
+- `upgrade-insecure-requests` is left out when a page is served over plain HTTP to a loopback host: `localhost`, a `*.localhost` name, `127.0.0.0/8` or `::1`. Safari applies the directive to loopback hosts, unlike Chrome and Firefox, so on a local development server every stylesheet, script and image was requested over HTTPS and the page rendered unstyled, in Safari only. The rest of the policy is sent unchanged.
+- The exemption reads the host, never the scheme alone. A site served over plain HTTP under its public name keeps the directive, and so does one behind a TLS-terminating reverse proxy missing from `trusted_proxies`, which the framework sees as plain HTTP.
+- A policy set through `BuildCspHeaderEvent` is sent as the listener wrote it.
+
+Documentation:
+
+- The README explains the local development exemption and how to drop the directive for a development server reached under another name, such as `app.test` or a LAN address, with `upgrade-insecure-requests: false` under `when@dev`.
+
 ## v3.1.0 - 2026-09-07
 
 New features:
