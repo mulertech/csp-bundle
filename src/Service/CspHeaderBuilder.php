@@ -31,18 +31,25 @@ final readonly class CspHeaderBuilder
     /**
      * @param array<string, list<string>|bool>|null $directivesOverride
      * @param list<string>|null                     $alwaysAddOverride
-     * @param bool|null                             $withReporting      decided per request by shouldReport() when omitted
+     * @param bool|null                             $withReporting       decided per request by shouldReport() when omitted
+     * @param bool                                  $plainLoopbackOrigin the page is served over plain HTTP to a loopback host,
+     *                                                                   where nothing answers the upgraded requests
      */
     public function build(
         ?array $directivesOverride = null,
         ?array $alwaysAddOverride = null,
         ?bool $withReporting = null,
+        bool $plainLoopbackOrigin = false,
     ): string {
         $directives = $directivesOverride ?? $this->directives;
         $alwaysAdd = $alwaysAddOverride ?? $this->alwaysAdd;
         $parts = [];
 
         foreach ($directives as $directive => $value) {
+            if ($plainLoopbackOrigin && 'upgrade-insecure-requests' === $directive) {
+                continue;
+            }
+
             if (true === $value) {
                 $parts[] = $directive;
                 continue;

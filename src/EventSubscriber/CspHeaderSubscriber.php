@@ -7,6 +7,7 @@ namespace MulerTech\CspBundle\EventSubscriber;
 use MulerTech\CspBundle\Event\BuildCspHeaderEvent;
 use MulerTech\CspBundle\Service\CspHeaderBuilder;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -68,13 +69,42 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
         }
 
         $withReporting = $this->builder->shouldReport();
-        $headerValue = $overridden ?? $this->builder->build(withReporting: $withReporting);
+        $plainLoopbackOrigin = $this->isPlainLoopbackOrigin($event->getRequest());
+        $headerValue = $overridden ?? $this->builder->build(withReporting: $withReporting, plainLoopbackOrigin: $plainLoopbackOrigin);
 
         $this->setHeader($response, $headerName, $headerValue);
 
-        $candidateValue = $this->addCandidateHeader($response, $overridden, $withReporting);
+        $candidateValue = $this->addCandidateHeader($response, $overridden, $withReporting, $plainLoopbackOrigin);
 
         $this->addReportingEndpointsHeader($response, $headerValue.' '.$candidateValue);
+    }
+
+    /**
+     * Whether the page is served over plain HTTP to a loopback host: `localhost`, a
+     * `*.localhost` name, `127.0.0.0/8` or `::1`, the hosts browsers treat as trustworthy
+     * without TLS. That is a development server, where nothing answers over HTTPS; Safari still
+     * applies `upgrade-insecure-requests` there and requests every stylesheet, script and image
+     * over HTTPS, so the page renders bare.
+     *
+     * The test reads the host and not the scheme alone. A site served over plain HTTP under its
+     * public name keeps the directive, and so does one behind a TLS-terminating proxy that is not
+     * declared trusted, which the framework sees as plain HTTP: its visitors never reach it under
+     * a loopback name.
+     */
+    private function isPlainLoopbackOrigin(Request $request): bool
+    {
+        if ($request->isSecure()) {
+            return false;
+        }
+
+        $host = strtolower(trim($request->getHost(), '[]'));
+
+        if ('localhost' === $host || str_ends_with($host, '.localhost') || '::1' === $host) {
+            return true;
+        }
+
+        return false !== filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
+            && str_starts_with($host, '127.');
     }
 
     private function isDocument(Response $response): bool
@@ -109,7 +139,7 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
      * expressed as a diff of the configured policy, so a listener replacing that policy
      * wholesale leaves nothing coherent to diff against and the candidate stands down.
      */
-    private function addCandidateHeader(Response $response, ?string $overridden, bool $withReporting): string
+    private function addCandidateHeader(Response $response, ?string $overridden, bool $withReporting, bool $plainLoopbackOrigin): string
     {
         if ([] === $this->candidateDirectives || null !== $overridden || $this->reportOnly) {
             return '';
@@ -119,7 +149,7 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
             return '';
         }
 
-        $value = $this->builder->build($this->candidateDirectives, withReporting: $withReporting);
+        $value = $this->builder->build($this->candidateDirectives, withReporting: $withReporting, plainLoopbackOrigin: $plainLoopbackOrigin);
 
         if ('' !== $value) {
             $response->headers->set(self::REPORT_ONLY_HEADER, $value);

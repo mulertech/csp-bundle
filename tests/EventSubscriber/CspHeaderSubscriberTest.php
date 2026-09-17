@@ -120,6 +120,94 @@ final class CspHeaderSubscriberTest extends TestCase
         self::assertSame("default-src 'self'", $header);
     }
 
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function plainLoopbackUrlProvider(): array
+    {
+        return [
+            'localhost' => ['http://localhost/'],
+            'localhost with a port' => ['http://localhost:11895/'],
+            'localhost subdomain' => ['http://shop.localhost/'],
+            'IPv4 loopback' => ['http://127.0.0.1/'],
+            'IPv4 loopback range' => ['http://127.0.1.1:8000/'],
+            'IPv6 loopback' => ['http://[::1]:8080/'],
+        ];
+    }
+
+    /**
+     * No server listens over HTTPS on a local development origin, and Safari applies the
+     * directive to loopback hosts too: every stylesheet, script and image would be requested
+     * over HTTPS and the page would render bare.
+     */
+    #[DataProvider('plainLoopbackUrlProvider')]
+    public function testUpgradeDirectiveIsDroppedOnAPlainLoopbackOrigin(string $url): void
+    {
+        $subscriber = $this->createSubscriber([
+            'default-src' => ["'self'"],
+            'upgrade-insecure-requests' => true,
+        ]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST, request: Request::create($url));
+        $subscriber->onKernelResponse($event);
+
+        self::assertSame("default-src 'self'", $event->getResponse()->headers->get('Content-Security-Policy'));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function upgradedUrlProvider(): array
+    {
+        return [
+            'public host over HTTP' => ['http://example.com/'],
+            'LAN address over HTTP' => ['http://192.168.1.10/'],
+            'host merely starting with localhost' => ['http://localhost.example.com/'],
+            'host merely containing a loopback address' => ['http://127.0.0.1.nip.io/'],
+            'localhost over HTTPS' => ['https://localhost/'],
+            'public host over HTTPS' => ['https://example.com/'],
+        ];
+    }
+
+    /**
+     * The exemption follows the host, not the scheme alone: a site served over plain HTTP under
+     * its public name keeps the directive, and so does one behind a TLS-terminating proxy that
+     * is not declared trusted, which the framework sees as plain HTTP.
+     */
+    #[DataProvider('upgradedUrlProvider')]
+    public function testUpgradeDirectiveIsKeptOutsideAPlainLoopbackOrigin(string $url): void
+    {
+        $subscriber = $this->createSubscriber([
+            'default-src' => ["'self'"],
+            'upgrade-insecure-requests' => true,
+        ]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST, request: Request::create($url));
+        $subscriber->onKernelResponse($event);
+
+        self::assertSame(
+            "default-src 'self'; upgrade-insecure-requests",
+            $event->getResponse()->headers->get('Content-Security-Policy'),
+        );
+    }
+
+    public function testListenerPolicyKeepsTheUpgradeDirectiveOnAPlainLoopbackOrigin(): void
+    {
+        $this->dispatcher->addListener(BuildCspHeaderEvent::NAME, static function (BuildCspHeaderEvent $event): void {
+            $event->setHeaderValue("default-src 'self'; upgrade-insecure-requests");
+        });
+
+        $subscriber = $this->createSubscriber(['default-src' => ["'self'"]]);
+
+        $event = $this->createResponseEvent(HttpKernelInterface::MAIN_REQUEST, request: Request::create('http://localhost/'));
+        $subscriber->onKernelResponse($event);
+
+        self::assertSame(
+            "default-src 'self'; upgrade-insecure-requests",
+            $event->getResponse()->headers->get('Content-Security-Policy'),
+        );
+    }
+
     public function testReportOnlyUsesCorrectHeaderName(): void
     {
         $subscriber = $this->createSubscriber(
@@ -504,7 +592,7 @@ final class CspHeaderSubscriberTest extends TestCase
         return $subscriber;
     }
 
-    private function createResponseEvent(int $requestType, ?string $contentType = null): ResponseEvent
+    private function createResponseEvent(int $requestType, ?string $contentType = null, ?Request $request = null): ResponseEvent
     {
         $kernel = $this->createStub(HttpKernelInterface::class);
         $response = new Response();
@@ -513,6 +601,6 @@ final class CspHeaderSubscriberTest extends TestCase
             $response->headers->set('Content-Type', $contentType);
         }
 
-        return new ResponseEvent($kernel, new Request(), $requestType, $response);
+        return new ResponseEvent($kernel, $request ?? new Request(), $requestType, $response);
     }
 }

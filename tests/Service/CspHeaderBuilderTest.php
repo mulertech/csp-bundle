@@ -50,6 +50,24 @@ final class CspHeaderBuilderTest extends TestCase
         self::assertSame("default-src 'self'", $builder->build());
     }
 
+    public function testUpgradeDirectiveIsDroppedForAPlainLoopbackOrigin(): void
+    {
+        $builder = $this->createBuilder([
+            'default-src' => ["'self'"],
+            'upgrade-insecure-requests' => true,
+            'block-all-mixed-content' => true,
+        ]);
+
+        self::assertSame(
+            "default-src 'self'; block-all-mixed-content",
+            $builder->build(plainLoopbackOrigin: true),
+        );
+        self::assertSame(
+            "default-src 'self'; upgrade-insecure-requests; block-all-mixed-content",
+            $builder->build(),
+        );
+    }
+
     public function testNonceParsing(): void
     {
         $builder = $this->createBuilder([

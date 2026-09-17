@@ -103,7 +103,7 @@ mulertech_csp:
 | `frame-ancestors` | `'none'` |
 | `base-uri` | `'none'` |
 | `form-action` | `'self'` |
-| `upgrade-insecure-requests` | `true` |
+| `upgrade-insecure-requests` | `true`, dropped on a local development origin (see below) |
 
 ### Responses that are not documents
 
@@ -121,6 +121,33 @@ act on. What is kept is what still describes the resource rather than the viewer
 
 A listener replacing the policy through `BuildCspHeaderEvent` states what it wants sent, and is
 applied whatever the response carries.
+
+### Local development over HTTP
+
+`upgrade-insecure-requests` is left out when the page is served over plain HTTP to a loopback
+host: `localhost`, any `*.localhost` name, `127.0.0.0/8` or `::1`. Nothing answers over HTTPS on
+such a development server, and Safari applies the directive to loopback hosts, unlike Chrome and
+Firefox: every stylesheet, script and image is requested over HTTPS and the page renders unstyled,
+in Safari only. The rest of the policy is sent unchanged.
+
+The exemption reads the host, never the scheme alone, so a production site keeps the directive:
+
+- a site served over plain HTTP under its public name keeps it, since its visitors never reach it
+  under a loopback name;
+- a site behind a TLS-terminating reverse proxy that is not listed in `trusted_proxies` keeps it
+  as well, although the framework sees such a request as plain HTTP.
+
+A development server reached under another name, `app.test` or a LAN address, is not recognised.
+Drop the directive for that environment only:
+
+```yaml
+when@dev:
+    mulertech_csp:
+        directives:
+            upgrade-insecure-requests: false
+```
+
+A policy set through `BuildCspHeaderEvent` is sent as the listener wrote it.
 
 ### Serving a page under a nonce policy
 
